@@ -238,19 +238,20 @@
         </button>
       </div>
 
-      <!-- Same Wi-Fi LAN Multiplayer -->
+      <!-- Same Wi-Fi LAN / Cloud Multiplayer -->
       <div class="control-group multiplayer-card">
         <div class="control-label-row">
-          <label>SAME WI-FI MULTIPLAYER</label>
+          <label id="mp-card-title">SAME WI-FI MULTIPLAYER</label>
           <span id="mp-status-pill" class="badge badge-online">● ACTIVE</span>
         </div>
-        <p class="mp-description">
+        <p class="mp-description" id="mp-card-desc">
           Open on any phone, laptop, or tablet connected to your Wi-Fi:
         </p>
         <div class="mp-url-box">
           <div class="mp-url-row">
-            <input type="text" id="wifi-url-input" readonly value="http://10.22.142.209:3000" class="mp-url-input">
-            <button id="btn-copy-wifi-url" class="btn-copy" title="Copy Wi-Fi Join URL">📋 Copy</button>
+            <input type="text" id="wifi-url-input" readonly value="http://10.22.142.209:3000" class="mp-url-input" placeholder="Server URL">
+            <button id="btn-copy-wifi-url" class="btn-copy" title="Copy URL">📋 Copy</button>
+            <button id="btn-connect-server" class="btn-connect hidden" title="Connect to Server">⚡ Connect</button>
           </div>
         </div>
         <div class="mp-chat-row">

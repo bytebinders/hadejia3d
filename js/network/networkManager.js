@@ -69,18 +69,32 @@ export class NetworkManager {
     }
 
     const isVercel = window.location.hostname.endsWith('vercel.app');
+    const isRender = window.location.hostname.endsWith('onrender.com');
     const savedUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('hadejia3d_ws_url') : null;
 
     let wsUrl = customUrl || savedUrl;
 
     if (!wsUrl) {
-      if (isVercel) {
-        console.log('[Multiplayer] Running on Vercel static hosting. Standalone Explorer mode active.');
+      if (isRender) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${window.location.host}`;
+      } else if (isVercel) {
+        console.log('[Multiplayer] Running on Vercel frontend. Standalone Explorer mode active.');
         this._notifyStatus('SOLO');
         return;
+      } else {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${window.location.host}`;
       }
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsUrl = `${protocol}//${window.location.host}`;
+    }
+
+    // Auto-normalize http(s) to ws(s) if user pasted Web URL
+    if (wsUrl.startsWith('https://')) {
+      wsUrl = wsUrl.replace('https://', 'wss://');
+    } else if (wsUrl.startsWith('http://')) {
+      wsUrl = wsUrl.replace('http://', 'ws://');
+    } else if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
+      wsUrl = `wss://${wsUrl}`;
     }
 
     try {
@@ -114,6 +128,25 @@ export class NetworkManager {
     } catch (e) {
       console.warn('[Multiplayer] WebSocket setup error:', e);
       this._notifyStatus('DISCONNECTED');
+    }
+  }
+
+  /**
+   * Set custom WebSocket server URL (e.g. Render relay) and reconnect
+   */
+  setServerUrl(url) {
+    const cleanUrl = (url || '').trim();
+    if (cleanUrl) {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('hadejia3d_ws_url', cleanUrl);
+      }
+      this.reconnectAttempts = 0;
+      this.connect(cleanUrl);
+    } else {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('hadejia3d_ws_url');
+      }
+      this.connect();
     }
   }
 

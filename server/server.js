@@ -34,6 +34,17 @@ const MIME_TYPES = {
 // 1. HTTP & HTTPS Static File Server
 function handleHttpRequest(req, res) {
   let reqPath = decodeURI(req.url.split('?')[0]);
+
+  // Health checks for Render / cloud deployment
+  if (reqPath === '/healthz' || reqPath === '/health') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end(JSON.stringify({ status: 'ok', players: players ? players.size : 0, uptime: process.uptime() }));
+    return;
+  }
+
   if (reqPath === '/' || reqPath === '' || reqPath === '/index.html') {
     reqPath = '/index.html';
   }

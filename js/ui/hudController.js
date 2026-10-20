@@ -103,9 +103,12 @@ export class HUDController {
     this.toastText = document.getElementById('toast-text');
     this.toastIcon = document.getElementById('toast-icon');
 
-    // Multiplayer Wi-Fi Controls
+    // Multiplayer Wi-Fi & Cloud Relay Controls
     this.wifiUrlInput = document.getElementById('wifi-url-input');
     this.btnCopyWifi = document.getElementById('btn-copy-wifi-url');
+    this.btnConnectServer = document.getElementById('btn-connect-server');
+    this.mpCardTitle = document.getElementById('mp-card-title');
+    this.mpCardDesc = document.getElementById('mp-card-desc');
     this.mpChatInput = document.getElementById('mp-chat-input');
     this.btnSendChat = document.getElementById('btn-send-chat');
 
@@ -414,11 +417,42 @@ export class HUDController {
   }
 
   _bindMultiplayerEvents() {
-    // Dynamically adjust Wi-Fi Join URL if accessed from another device
-    if (this.wifiUrlInput) {
-      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        this.wifiUrlInput.value = `${window.location.origin}`;
+    const isVercel = window.location.hostname.endsWith('vercel.app');
+    const isRender = window.location.hostname.endsWith('onrender.com');
+
+    // Adapt UI according to environment (Vercel frontend, Render cloud, or LAN)
+    if (isVercel) {
+      if (this.mpCardTitle) this.mpCardTitle.textContent = 'RENDER CLOUD MULTIPLAYER';
+      if (this.mpCardDesc) this.mpCardDesc.textContent = 'Connect to Render WebSocket relay for global multiplayer & 3D voice:';
+      if (this.btnConnectServer) this.btnConnectServer.classList.remove('hidden');
+      if (this.wifiUrlInput) {
+        this.wifiUrlInput.removeAttribute('readonly');
+        const savedUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('hadejia3d_ws_url') : null;
+        this.wifiUrlInput.value = savedUrl || 'wss://hadejia3d.onrender.com';
       }
+    } else if (isRender) {
+      if (this.mpCardTitle) this.mpCardTitle.textContent = 'RENDER CLOUD MULTIPLAYER';
+      if (this.mpCardDesc) this.mpCardDesc.textContent = 'Share this link with anyone to explore together with 3D voice:';
+      if (this.wifiUrlInput) {
+        this.wifiUrlInput.value = window.location.origin;
+      }
+    } else {
+      if (this.wifiUrlInput) {
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          this.wifiUrlInput.value = `${window.location.origin}`;
+        }
+      }
+    }
+
+    if (this.btnConnectServer) {
+      this.btnConnectServer.addEventListener('click', () => {
+        if (!this.wifiUrlInput) return;
+        const targetUrl = this.wifiUrlInput.value.trim();
+        if (this.app.networkMgr) {
+          this.showToast(`Connecting to ${targetUrl}...`, '⚡');
+          this.app.networkMgr.setServerUrl(targetUrl);
+        }
+      });
     }
 
     if (this.btnCopyWifi && this.wifiUrlInput) {
@@ -426,14 +460,14 @@ export class HUDController {
         try {
           await navigator.clipboard.writeText(this.wifiUrlInput.value);
           this.btnCopyWifi.textContent = '✅ Copied!';
-          this.showToast('Copied Wi-Fi join link! Open on any device on same Wi-Fi.', '🌐');
+          this.showToast('Copied join link to clipboard!', '🌐');
           setTimeout(() => {
             this.btnCopyWifi.textContent = '📋 Copy';
           }, 2500);
         } catch (e) {
           this.wifiUrlInput.select();
           document.execCommand('copy');
-          this.showToast('Wi-Fi link selected. Press Ctrl+C to copy.', '📋');
+          this.showToast('Link selected. Press Ctrl+C to copy.', '📋');
         }
       });
     }
