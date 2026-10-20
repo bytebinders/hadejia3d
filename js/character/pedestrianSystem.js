@@ -45,6 +45,12 @@ const CITIZEN_TITLES = [
 
 const CITIZEN_AVATARS = ['👑', '🕌', '🐟', '🌴', '🛺', '🌾', '🧕', '👳', '🍵', '🪡', '📜', '🦅'];
 
+const RIG_JOINTS = [
+  'hips', 'torso', 'headPivot',
+  'leftArmUpper', 'leftArmLower', 'rightArmUpper', 'rightArmLower',
+  'leftLegUpper', 'leftLegLower', 'rightLegUpper', 'rightLegLower'
+];
+
 export class PedestrianSystem {
   constructor(scene, collisionSys = null, charLoader = null) {
     this.scene = scene;
@@ -295,6 +301,21 @@ export class PedestrianSystem {
         walkSpeed: 2.3 + Math.random() * 1.2,
         jogSpeed: 5.4 + Math.random() * 1.4,
         speed: 2.5,
+        curSpeed: 0,
+        avoid: new THREE.Vector2(),
+
+        // Individual body language so no two people move identically
+        gait: {
+          stride: 0.85 + Math.random() * 0.3,
+          armSwing: 0.75 + Math.random() * 0.5,
+          posture: -0.03 + Math.random() * 0.09,
+          bounce: 0.8 + Math.random() * 0.4,
+          hipSway: isMen ? 0.03 : 0.06
+        },
+        breathPhase: Math.random() * Math.PI * 2,
+        lookYaw: 0,
+        waveTimer: 0,
+        waveDuration: 1.4,
 
         // Autonomous State: 'WALKING', 'JOGGING', 'SITTING', 'LAYING', 'TALKING', 'DANCING',
         // 'CHECKING_PHONE', 'DRINKING_COFFEE', 'LOOKING_AROUND', 'PLAYER_TALKING'
@@ -336,10 +357,11 @@ export class PedestrianSystem {
     rig.leftLegLower.rotation.x = Math.PI / 2 - 0.1;
     rig.rightLegUpper.rotation.x = -Math.PI / 2 + 0.1;
     rig.rightLegLower.rotation.x = Math.PI / 2 - 0.1;
-    rig.leftArmUpper.rotation.x = -0.3;
-    rig.leftArmLower.rotation.x = 0.5;
-    rig.rightArmUpper.rotation.x = -0.3;
-    rig.rightArmLower.rotation.x = 0.5;
+    // Hands resting on the lap (negative elbow = natural forward flexion)
+    rig.leftArmUpper.rotation.x = -0.35;
+    rig.leftArmLower.rotation.x = -0.6;
+    rig.rightArmUpper.rotation.x = -0.35;
+    rig.rightArmLower.rotation.x = -0.6;
   }
 
   _resetToStandingPose(rig) {
@@ -347,6 +369,7 @@ export class PedestrianSystem {
     rig.hips.position.set(0, 1.35, 0);
     rig.hips.rotation.set(0, 0, 0);
     rig.torso.rotation.set(0, 0, 0);
+    rig.torso.scale.set(1, 1, 1);
     rig.headPivot.rotation.set(0, 0, 0);
     rig.leftArmUpper.rotation.set(0, 0, 0);
     rig.leftArmLower.rotation.set(0, 0, 0);
@@ -358,428 +381,610 @@ export class PedestrianSystem {
     rig.rightLegLower.rotation.set(0, 0, 0);
   }
 
-  update(delta) {
+  /**
+   * Rotate a mesh toward a yaw along the shortest arc instead of snapping
+   */
+  _turnTowards(mesh, targetYaw, rate, delta) {
+    let diff = targetYaw - mesh.rotation.y;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    mesh.rotation.y += diff * Math.min(1, rate * delta);
+  }
+
+  /**
+   * Head tracks the player when they come close (within ~6m and in front)
+   */
+  _updateGaze(c, playerPos, delta) {
+    let target = 0;
+    if (playerPos && c.state !== 'LAYING' && c.state !== 'DANCING') {
+      const dx = playerPos.x - c.mesh.position.x;
+      const dz = playerPos.z - c.mesh.position.z;
+      if (dx * dx + dz * dz < 36) {
+        let rel = Math.atan2(dx, dz) - c.mesh.rotation.y;
+        rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+        if (Math.abs(rel) < 1.9) target = THREE.MathUtils.clamp(rel, -1.0, 1.0);
+      }
+    }
+    c.lookYaw += (target - c.lookYaw) * Math.min(1, delta * 3);
+  }
+
+  /**
+   * Subtle chest rise and fall
+   */
+  _breathe(c, nowTime) {
+    const b = Math.sin((nowTime + c.breathPhase) * 1.7);
+    c.rig.torso.scale.set(1 + b * 0.01, 1, 1 + b * 0.02);
+  }
+
+  /**
+   * Relaxed standing: breathing, slow weight shift between feet, soft knee on the unloaded leg
+   */
+  _applyIdleStance(c, nowTime) {
+    const r = c.rig;
+    this._breathe(c, nowTime);
+    const t = nowTime + c.breathPhase * 3;
+    const shift = Math.sin(t * 0.35) * 0.8 + Math.sin(t * 0.13) * 0.2;
+    const relaxL = Math.max(0, -shift);
+    const relaxR = Math.max(0, shift);
+
+    r.hips.position.set(shift * 0.035, 1.35 - Math.abs(shift) * 0.01, 0);
+    r.hips.rotation.set(0, 0, -shift * 0.03);
+    r.torso.rotation.set(c.gait.posture + Math.sin(t * 1.7) * 0.01, 0, shift * 0.035);
+
+    r.leftLegUpper.rotation.set(-relaxL * 0.08, 0, shift * 0.03);
+    r.leftLegLower.rotation.set(relaxL * 0.16, 0, 0);
+    r.rightLegUpper.rotation.set(-relaxR * 0.08, 0, shift * 0.03);
+    r.rightLegLower.rotation.set(relaxR * 0.16, 0, 0);
+
+    r.leftArmUpper.rotation.set(0.03, 0, 0.08);
+    r.leftArmLower.rotation.set(-0.15, 0, 0);
+    r.rightArmUpper.rotation.set(0.03, 0, -0.08);
+    r.rightArmLower.rotation.set(-0.15, 0, 0);
+
+    r.headPivot.rotation.set(-r.torso.rotation.x * 0.5, c.lookYaw, -shift * 0.02);
+  }
+
+  /**
+   * Animated hand wave (raise, wave, lower). Returns true while waving.
+   */
+  _applyWave(c, delta) {
+    if (!c.rig || !(c.waveTimer > 0)) return false;
+    c.waveTimer -= delta;
+    const k = THREE.MathUtils.clamp(c.waveTimer / (c.waveDuration || 1.4), 0, 1);
+    const lift = Math.sin(k * Math.PI);
+    c.rig.rightArmUpper.rotation.set(-0.2 * lift, 0, -0.06 - 2.25 * lift);
+    c.rig.rightArmLower.rotation.set(0, 0, (-0.3 + Math.sin(performance.now() * 0.012) * 0.45) * lift);
+    return true;
+  }
+
+  /**
+   * Personal space: steer sideways around nearby people (and the player) and slow down
+   * when someone is directly ahead. Returns a speed factor.
+   */
+  _computeAvoidance(c, index, delta, playerPos) {
+    const fx = Math.sin(c.mesh.rotation.y);
+    const fz = Math.cos(c.mesh.rotation.y);
+    const px = c.mesh.position.x;
+    const pz = c.mesh.position.z;
+    let sx = 0, sz = 0, slow = 1;
+
+    const consider = (ox, oz) => {
+      const dx = ox - px, dz = oz - pz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > 4 || d2 < 1e-6) return;
+      const d = Math.sqrt(d2);
+      const push = (2 - d) / 2;
+      sx -= (dx / d) * push;
+      sz -= (dz / d) * push;
+      const ahead = (dx * fx + dz * fz) / d;
+      if (ahead > 0.7 && d < 1.6) slow = Math.min(slow, 0.35 + (d / 1.6) * 0.65);
+    };
+
+    for (let j = 0; j < this.allCitizens.length; j++) {
+      if (j === index) continue;
+      const o = this.allCitizens[j].mesh.position;
+      consider(o.x, o.z);
+    }
+    if (playerPos) consider(playerPos.x, playerPos.z);
+
+    const k = Math.min(1, delta * 2);
+    c.avoid.x += (sx * 0.6 - c.avoid.x) * k;
+    c.avoid.y += (sz * 0.6 - c.avoid.y) * k;
+    const len = c.avoid.length();
+    if (len > 0.8) c.avoid.multiplyScalar(0.8 / len);
+    return slow;
+  }
+
+  /**
+   * Biomechanical walk / run cycle. Cadence is derived from speed and stride length
+   * so feet don't slide; knees fold in swing, pelvis shifts over the stance leg and
+   * rotates with the stride, shoulders counter-rotate, head stays stabilised.
+   */
+  _animateGait(c, isJogging, delta) {
+    const r = c.rig;
+    if (!r) return;
+    const g = c.gait;
+    const pace = THREE.MathUtils.clamp(c.curSpeed / (isJogging ? c.jogSpeed : c.walkSpeed), 0, 1.2);
+    const p1 = Math.min(1, pace);
+    const stride = (isJogging ? 0.8 : 0.48) * g.stride * Math.max(0.15, pace);
+    const legLen = 1.3 * c.mesh.scale.y;
+    const stepLen = Math.max(0.15, 2 * legLen * Math.sin(stride));
+    c.animPhase += delta * Math.PI * c.curSpeed / stepLen;
+
+    const ph = c.animPhase;
+    const s = Math.sin(ph);
+    const co = Math.cos(ph);
+
+    // Legs
+    const kneeSwing = (isJogging ? 1.5 : 0.75) * p1;
+    r.leftLegUpper.rotation.set(-s * stride, 0, 0);
+    r.rightLegUpper.rotation.set(s * stride, 0, 0);
+    r.leftLegLower.rotation.set(Math.max(0, co) * kneeSwing + 0.05, 0, 0);
+    r.rightLegLower.rotation.set(Math.max(0, -co) * kneeSwing + 0.05, 0, 0);
+
+    // Pelvis: vertical bob (highest at mid-stance when walking, in flight when running),
+    // lateral shift over the stance leg, yaw with the stride, drop on the swing side
+    const bobAmp = (isJogging ? 0.1 : 0.045) * g.bounce * p1;
+    const bob = isJogging ? (1 - Math.cos(2 * ph)) * 0.5 : (1 + Math.cos(2 * ph)) * 0.5;
+    const pelvisYaw = -s * 0.07 * p1;
+    const pelvisDrop = -co * g.hipSway * 0.8 * p1;
+    r.hips.position.set(-co * g.hipSway * p1, 1.35 - bobAmp * 0.5 + bob * bobAmp, 0);
+    r.hips.rotation.set(0, pelvisYaw, pelvisDrop);
+
+    // Spine: forward lean with speed, shoulders counter-rotate against the pelvis
+    r.torso.rotation.set(
+      g.posture + (isJogging ? 0.18 : 0.04) * p1,
+      -pelvisYaw * 1.8,
+      -pelvisDrop * 1.2
+    );
+    r.torso.scale.set(1, 1, 1);
+
+    // Arms swing opposite the legs with a slight lag; forward-swinging elbow flexes more
+    const a = Math.sin(ph - 0.25);
+    const swing = (isJogging ? 0.85 : 0.42) * g.armSwing * Math.max(0.1, p1);
+    const baseElbow = isJogging ? 1.35 : 0.12;
+    const elbowGain = isJogging ? 0.25 : 0.4;
+    const spread = isJogging ? 0.1 : 0.07;
+    r.leftArmUpper.rotation.set(a * swing, 0, spread);
+    r.leftArmLower.rotation.set(-(baseElbow + Math.max(0, -a) * elbowGain), 0, 0);
+    r.rightArmUpper.rotation.set(-a * swing, 0, -spread);
+    r.rightArmLower.rotation.set(-(baseElbow + Math.max(0, a) * elbowGain), 0, 0);
+
+    // Head stays level and facing forward (plus gaze toward the player)
+    r.headPivot.rotation.set(
+      -r.torso.rotation.x * 0.6 + 0.02,
+      -(pelvisYaw + r.torso.rotation.y) + c.lookYaw,
+      -(pelvisDrop + r.torso.rotation.z)
+    );
+  }
+
+  /**
+   * Blend joints over ~0.4s whenever a citizen changes state, so poses
+   * transition (sit -> stand, walk -> phone, etc.) instead of snapping.
+   */
+  _smoothPose(c, delta) {
+    const r = c.rig;
+    if (!r) return;
+    if (!c.poseCache) {
+      c.poseCache = RIG_JOINTS.map(key => r[key].rotation.clone());
+      c.hipsCache = r.hips.position.clone();
+      c.lastState = c.state;
+      return;
+    }
+    if (c.lastState !== c.state) {
+      c.blend = 1;
+      c.lastState = c.state;
+    }
+    if (c.blend > 0) {
+      c.blend = Math.max(0, c.blend - delta / 0.4);
+      const k = 1 - Math.exp(-delta * 10);
+      RIG_JOINTS.forEach((key, idx) => {
+        const cur = r[key].rotation;
+        const prev = c.poseCache[idx];
+        cur.set(
+          prev.x + (cur.x - prev.x) * k,
+          prev.y + (cur.y - prev.y) * k,
+          prev.z + (cur.z - prev.z) * k
+        );
+      });
+      if (c.state !== 'LAYING' && c.state !== 'SITTING') {
+        r.hips.position.lerpVectors(c.hipsCache, r.hips.position, k);
+      }
+    }
+    RIG_JOINTS.forEach((key, idx) => c.poseCache[idx].copy(r[key].rotation));
+    c.hipsCache.copy(r.hips.position);
+  }
+
+  update(delta, playerPos = null) {
     if (!this.allCitizens.length) return;
     const nowTime = performance.now() * 0.001;
 
     for (let i = 0; i < this.allCitizens.length; i++) {
       const c = this.allCitizens[i];
+      this._updateCitizen(c, i, delta, nowTime, playerPos);
+      this._smoothPose(c, delta);
+    }
+  }
 
-      // Decrement timers
-      if (c.talkCooldown > 0) c.talkCooldown -= delta;
-      if (c.decisionCooldown > 0) c.decisionCooldown -= delta;
-      if (c.stateTimer > 0) c.stateTimer -= delta;
+  _updateCitizen(c, i, delta, nowTime, playerPos) {
+    // Decrement timers
+    if (c.talkCooldown > 0) c.talkCooldown -= delta;
+    if (c.decisionCooldown > 0) c.decisionCooldown -= delta;
+    if (c.stateTimer > 0) c.stateTimer -= delta;
 
-      // ==========================================
-      // STATE 1: PLAYER_TALKING (Interacting with Player)
-      // ==========================================
-      if (c.state === 'PLAYER_TALKING') {
-        const t = nowTime * 4.0;
-        if (c.rig) {
-          c.rig.rightArmUpper.rotation.x = -0.4 + Math.sin(t) * 0.2;
-          c.rig.rightArmLower.rotation.x = 0.6;
-          c.rig.headPivot.rotation.x = 0.06;
-        } else if (c.fbxInstance && this.charLoader) {
-          this.charLoader.animateInstance(c.fbxInstance, 'IDLE', c.animPhase, delta);
-        }
-        c.bubbleSprite.visible = true;
-        c.bubbleSprite.material.map = this.bubbleTextures.chat;
-        continue;
+    // Anyone not on the move is standing still and will accelerate from rest when they set off
+    if (c.state !== 'WALKING' && c.state !== 'JOGGING') c.curSpeed = 0;
+
+    this._updateGaze(c, playerPos, delta);
+
+    // ==========================================
+    // STATE 1: PLAYER_TALKING (Interacting with Player)
+    // ==========================================
+    if (c.state === 'PLAYER_TALKING') {
+      const seated = c.prevState === 'SITTING';
+      if (!seated && c.faceYaw !== undefined) this._turnTowards(c.mesh, c.faceYaw, 5, delta);
+      const t = nowTime * 4.0;
+      if (c.rig) {
+        if (seated) this._breathe(c, nowTime);
+        else this._applyIdleStance(c, nowTime);
+        c.rig.rightArmUpper.rotation.set(-0.3 + Math.sin(t) * 0.15, 0, -0.08);
+        c.rig.rightArmLower.rotation.set(-0.8, 0, 0);
+        c.rig.headPivot.rotation.x = 0.06 + Math.sin(t * 0.5) * 0.03;
+        this._applyWave(c, delta);
+      }
+      c.bubbleSprite.visible = true;
+      if (!(c.waveTimer > 0)) c.bubbleSprite.material.map = this.bubbleTextures.chat;
+      return;
+    }
+
+    // ==========================================
+    // STATE 2: SITTING (On Central Park Bench)
+    // ==========================================
+    if (c.state === 'SITTING') {
+      // Breathe and glance around while seated
+      const t = nowTime * 1.5;
+      if (c.rig) {
+        this._breathe(c, nowTime);
+        c.rig.headPivot.rotation.y = Math.sin(t + c.breathPhase) * 0.2 + c.lookYaw;
       }
 
-      // ==========================================
-      // STATE 2: SITTING (On Central Park Bench)
-      // ==========================================
-      if (c.state === 'SITTING') {
-        // Occasionally glance around or check phone while seated
-        const t = nowTime * 1.5;
-        if (c.rig) {
-          c.rig.headPivot.rotation.y = Math.sin(t) * 0.25;
-        } else if (c.fbxInstance && this.charLoader) {
-          this.charLoader.animateInstance(c.fbxInstance, 'IDLE', c.animPhase, delta);
+      // When well rested, stand up and choose where to explore next!
+      if (c.stateTimer <= 0) {
+        if (c.benchRef) {
+          c.benchRef.occupant = null;
+          c.benchRef = null;
         }
-
-        // When well rested, stand up and choose where to explore next!
-        if (c.stateTimer <= 0) {
-          if (c.benchRef) {
-            c.benchRef.occupant = null;
-            c.benchRef = null;
-          }
-          this._resetToStandingPose(c.rig);
-          c.bubbleSprite.visible = false;
-          c.state = 'WALKING';
-          c.speed = c.walkSpeed;
-          c.decisionCooldown = 15.0 + Math.random() * 15.0;
-
-          // Pick destination from park fountain
-          c.currentNodeKey = 'park_fountain';
-          const node = this.nodes['park_fountain'];
-          c.targetNodeKey = node.neighbors[Math.floor(Math.random() * node.neighbors.length)];
-          c.progress = 0;
-        }
-        continue;
-      }
-
-      // ==========================================
-      // STATE 3: LAYING (Sunbathing on Park Grass)
-      // ==========================================
-      if (c.state === 'LAYING') {
-        if (c.stateTimer <= 0) {
-          // Stand up and resume walking
-          c.mesh.rotation.x = 0;
-          this._resetToStandingPose(c.rig);
-          c.bubbleSprite.visible = false;
-          c.state = 'WALKING';
-          c.speed = c.walkSpeed;
-          c.decisionCooldown = 18.0 + Math.random() * 15.0;
-        }
-        continue;
-      }
-
-      // ==========================================
-      // STATE 4: DANCING (Spontaneous street dance)
-      // ==========================================
-      if (c.state === 'DANCING') {
-        if (c.stateTimer <= 0) {
-          this._resetToStandingPose(c.rig);
-          c.bubbleSprite.visible = false;
-          c.state = 'WALKING';
-          c.speed = c.walkSpeed;
-          c.decisionCooldown = 20.0 + Math.random() * 15.0;
-        } else {
-          // Play energetic dance animation
-          const t = nowTime * 6.5;
-          if (c.rig) {
-            c.rig.hips.position.x = Math.sin(t) * 0.14;
-            c.rig.hips.rotation.y = Math.sin(t) * 0.32;
-            c.rig.leftArmUpper.rotation.z = 1.1 + Math.sin(t) * 0.45;
-            c.rig.leftArmUpper.rotation.x = Math.cos(t) * 0.55;
-            c.rig.rightArmUpper.rotation.z = -1.1 - Math.sin(t) * 0.45;
-            c.rig.rightArmUpper.rotation.x = -Math.cos(t) * 0.55;
-            c.rig.headPivot.rotation.z = -Math.sin(t) * 0.22;
-          } else if (c.fbxInstance && this.charLoader) {
-            this.charLoader.animateInstance(c.fbxInstance, 'RUN', t, delta);
-          }
-        }
-        continue;
-      }
-
-      // ==========================================
-      // STATE 5: TALKING (NPC-to-NPC Social Chat)
-      // ==========================================
-      if (c.state === 'TALKING') {
-        if (c.stateTimer <= 0) {
-          // Wave goodbye and resume wandering
-          c.bubbleSprite.visible = false;
-          this._resetToStandingPose(c.rig);
-          c.state = 'WALKING';
-          c.speed = c.walkSpeed;
-          c.talkCooldown = 18.0 + Math.random() * 12.0;
-          c.decisionCooldown = 10.0 + Math.random() * 10.0;
-          c.partner = null;
-        } else {
-          const t = nowTime * 4.0;
-          if (c.rig) {
-            if (c.isSpeaker) {
-              c.rig.rightArmUpper.rotation.x = -0.45 + Math.sin(t) * 0.24;
-              c.rig.rightArmLower.rotation.x = 0.65 + Math.cos(t) * 0.22;
-              c.rig.headPivot.rotation.x = 0.08 + Math.sin(t * 0.7) * 0.06;
-            } else {
-              c.rig.rightArmUpper.rotation.x = 0.06;
-              c.rig.rightArmLower.rotation.x = 0.22;
-              c.rig.headPivot.rotation.x = Math.max(0, Math.sin(t * 0.8) * 0.08);
-            }
-          } else if (c.fbxInstance && this.charLoader) {
-            this.charLoader.animateInstance(c.fbxInstance, 'IDLE', t, delta);
-          }
-          c.bubbleSprite.position.y = 2.05 + Math.sin(nowTime * 3) * 0.03;
-        }
-        continue;
-      }
-
-      // ==========================================
-      // STATE 6: INDIVIDUAL ACTIONS (Phone, Coffee, Skyline)
-      // ==========================================
-      if (c.state === 'CHECKING_PHONE') {
-        if (c.stateTimer <= 0) {
-          this._resetToStandingPose(c.rig);
-          c.bubbleSprite.visible = false;
-          c.state = 'WALKING';
-          c.speed = c.walkSpeed;
-        } else {
-          if (c.rig) {
-            c.rig.rightArmUpper.rotation.x = -0.65;
-            c.rig.rightArmLower.rotation.x = 1.15;
-            c.rig.leftArmUpper.rotation.x = -0.4;
-            c.rig.leftArmLower.rotation.x = 0.85;
-            c.rig.headPivot.rotation.x = 0.32;
-          } else if (c.fbxInstance && this.charLoader) {
-            this.charLoader.animateInstance(c.fbxInstance, 'IDLE', nowTime, delta);
-          }
-        }
-        continue;
-      }
-
-      if (c.state === 'DRINKING_COFFEE') {
-        if (c.stateTimer <= 0) {
-          this._resetToStandingPose(c.rig);
-          c.bubbleSprite.visible = false;
-          c.state = 'WALKING';
-          c.speed = c.walkSpeed;
-        } else {
-          if (c.rig) {
-            c.rig.rightArmUpper.rotation.x = -0.8;
-            c.rig.rightArmLower.rotation.x = 1.3;
-            c.rig.headPivot.rotation.x = -0.12;
-          } else if (c.fbxInstance && this.charLoader) {
-            this.charLoader.animateInstance(c.fbxInstance, 'IDLE', nowTime, delta);
-          }
-        }
-        continue;
-      }
-
-      if (c.state === 'LOOKING_AROUND') {
-        if (c.stateTimer <= 0) {
-          this._resetToStandingPose(c.rig);
-          c.bubbleSprite.visible = false;
-          c.state = 'WALKING';
-          c.speed = c.walkSpeed;
-        } else {
-          if (c.rig) {
-            c.rig.headPivot.rotation.y = Math.sin(nowTime * 1.5) * 0.45;
-          } else if (c.fbxInstance && this.charLoader) {
-            this.charLoader.animateInstance(c.fbxInstance, 'IDLE', nowTime, delta);
-          }
-        }
-        continue;
-      }
-
-      // ==========================================
-      // STATE 7: WALKING OR JOGGING (Dynamic Graph Navigation)
-      // ==========================================
-      const isJogging = (c.state === 'JOGGING');
-      if (isJogging && c.stateTimer <= 0) {
+        this._resetToStandingPose(c.rig);
+        c.bubbleSprite.visible = false;
         c.state = 'WALKING';
         c.speed = c.walkSpeed;
-        c.bubbleSprite.visible = false;
-        c.decisionCooldown = 15.0 + Math.random() * 10.0;
+        c.decisionCooldown = 15.0 + Math.random() * 15.0;
+
+        // Pick destination from park fountain
+        c.currentNodeKey = 'park_fountain';
+        const node = this.nodes['park_fountain'];
+        c.targetNodeKey = node.neighbors[Math.floor(Math.random() * node.neighbors.length)];
+        c.progress = 0;
       }
+      return;
+    }
 
-      const fromNode = this.nodes[c.currentNodeKey];
-      const toNode = this.nodes[c.targetNodeKey];
+    // ==========================================
+    // STATE 3: LAYING (Sunbathing on Park Grass)
+    // ==========================================
+    if (c.state === 'LAYING') {
+      if (c.rig) this._breathe(c, nowTime);
+      if (c.stateTimer <= 0) {
+        // Stand up and resume walking
+        c.mesh.rotation.x = 0;
+        this._resetToStandingPose(c.rig);
+        c.bubbleSprite.visible = false;
+        c.state = 'WALKING';
+        c.speed = c.walkSpeed;
+        c.decisionCooldown = 18.0 + Math.random() * 15.0;
+      }
+      return;
+    }
 
-      if (fromNode && toNode) {
-        const p1 = fromNode.pos;
-        const p2 = toNode.pos;
-        const segmentDist = p1.distanceTo(p2) || 10;
+    // ==========================================
+    // STATE 4: DANCING (Spontaneous street dance)
+    // ==========================================
+    if (c.state === 'DANCING') {
+      if (c.stateTimer <= 0) {
+        this._resetToStandingPose(c.rig);
+        c.bubbleSprite.visible = false;
+        c.state = 'WALKING';
+        c.speed = c.walkSpeed;
+        c.decisionCooldown = 20.0 + Math.random() * 15.0;
+      } else if (c.rig) {
+        // Play energetic dance animation
+        const t = nowTime * 6.5;
+        c.rig.hips.position.x = Math.sin(t) * 0.14;
+        c.rig.hips.rotation.y = Math.sin(t) * 0.32;
+        c.rig.leftArmUpper.rotation.z = 1.1 + Math.sin(t) * 0.45;
+        c.rig.leftArmUpper.rotation.x = Math.cos(t) * 0.55;
+        c.rig.rightArmUpper.rotation.z = -1.1 - Math.sin(t) * 0.45;
+        c.rig.rightArmUpper.rotation.x = -Math.cos(t) * 0.55;
+        c.rig.headPivot.rotation.z = -Math.sin(t) * 0.22;
+      }
+      return;
+    }
 
-        c.progress += (c.speed * delta) / segmentDist;
-
-        if (c.progress >= 1.0) {
-          // Arrived at target node! Pick next destination autonomously
-          c.currentNodeKey = c.targetNodeKey;
-          c.progress = 0;
-
-          const currentNode = this.nodes[c.currentNodeKey];
-          const options = currentNode.neighbors;
-          c.targetNodeKey = options[Math.floor(Math.random() * options.length)];
-
-          // ----------------------------------------------------
-          // Autonomous Decision Engine ("Do what they like!")
-          // ----------------------------------------------------
-          if (c.decisionCooldown <= 0) {
-            c.decisionCooldown = 12.0 + Math.random() * 16.0;
-
-            // Decision Option A: Sit on a bench in Central Park
-            if (currentNode.district === 'park') {
-              const freeBench = this.benches.find(b => b.occupant === null);
-              if (freeBench && Math.random() < 0.35) {
-                freeBench.occupant = c;
-                c.benchRef = freeBench;
-                c.state = 'SITTING';
-                c.stateTimer = 12.0 + Math.random() * 18.0;
-                const groundY = this.collisionSys
-                  ? this.collisionSys.getGroundHeight(freeBench.x, freeBench.z)
-                  : 1.85;
-                c.mesh.position.set(freeBench.x, groundY, freeBench.z);
-                c.mesh.rotation.y = freeBench.rot;
-                this._applySittingPose(c.rig);
-                c.bubbleSprite.visible = true;
-                c.bubbleSprite.material.map = this.bubbleTextures.bench;
-                continue;
-              }
-
-              // Decision Option B: Lie down on soft green grass to sunbathe
-              if (Math.random() < 0.22) {
-                c.state = 'LAYING';
-                c.stateTimer = 10.0 + Math.random() * 12.0;
-                c.mesh.rotation.x = -Math.PI / 2;
-                if (c.rig) c.rig.hips.position.y = 0.28;
-                c.bubbleSprite.visible = true;
-                c.bubbleSprite.material.map = this.bubbleTextures.lay;
-                continue;
-              }
-            }
-
-            // Decision Option C: Spontaneous Joyful Dance!
-            if (Math.random() < 0.12) {
-              c.state = 'DANCING';
-              c.stateTimer = 4.5 + Math.random() * 3.5;
-              c.bubbleSprite.visible = true;
-              c.bubbleSprite.material.map = this.bubbleTextures.dance;
-              continue;
-            }
-
-            // Decision Option D: Athletic Jogging sprint
-            if (Math.random() < 0.2) {
-              c.state = 'JOGGING';
-              c.speed = c.jogSpeed;
-              c.stateTimer = 8.0 + Math.random() * 12.0;
-              c.bubbleSprite.visible = true;
-              c.bubbleSprite.material.map = this.bubbleTextures.jog;
-            }
-
-            // Decision Option E: Check phone
-            if (Math.random() < 0.15) {
-              c.state = 'CHECKING_PHONE';
-              c.stateTimer = 3.5;
-              c.bubbleSprite.visible = true;
-              c.bubbleSprite.material.map = this.bubbleTextures.phone;
-              continue;
-            }
-
-            // Decision Option F: Drink coffee
-            if (Math.random() < 0.15) {
-              c.state = 'DRINKING_COFFEE';
-              c.stateTimer = 3.2;
-              c.bubbleSprite.visible = true;
-              c.bubbleSprite.material.map = this.bubbleTextures.coffee;
-              continue;
-            }
-
-            // Decision Option G: Admire scenic skyline
-            if (Math.random() < 0.15) {
-              c.state = 'LOOKING_AROUND';
-              c.stateTimer = 3.5;
-              c.bubbleSprite.visible = true;
-              c.bubbleSprite.material.map = this.bubbleTextures.city;
-              continue;
-            }
-          }
-        }
-
-        // Interpolate position along segment
-        const targetPos = new THREE.Vector3().lerpVectors(p1, p2, c.progress);
-
-        if (this.collisionSys) {
-          const resolved = this.collisionSys.resolveMovement(
-            c.mesh.position.x,
-            c.mesh.position.z,
-            targetPos.x,
-            targetPos.z,
-            0.28
-          );
-          c.mesh.position.x = resolved.x;
-          c.mesh.position.z = resolved.z;
-        } else {
-          c.mesh.position.x = targetPos.x;
-          c.mesh.position.z = targetPos.z;
-        }
-
-        // Dynamic surface elevation following
-        const groundY = this.collisionSys
-          ? this.collisionSys.getGroundHeight(c.mesh.position.x, c.mesh.position.z)
-          : targetPos.y;
-        c.mesh.position.y = groundY;
-
-        // Facing orientation toward travel direction
-        const dirX = p2.x - p1.x;
-        const dirZ = p2.z - p1.z;
-        if (Math.abs(dirX) > 0.001 || Math.abs(dirZ) > 0.001) {
-          c.mesh.rotation.y = Math.atan2(dirX, dirZ);
-        }
-
-        // Procedural gait animation
-        const animSpeed = isJogging ? c.speed * 2.2 : c.speed * 2.8;
-        c.animPhase += delta * animSpeed;
-        const phase = c.animPhase;
-        const stride = isJogging ? 0.95 : 0.58;
-        const armSwing = isJogging ? 0.9 : 0.5;
-
+    // ==========================================
+    // STATE 5: TALKING (NPC-to-NPC Social Chat)
+    // ==========================================
+    if (c.state === 'TALKING') {
+      if (c.stateTimer <= 0) {
+        // Wave goodbye and resume wandering
+        c.bubbleSprite.visible = false;
+        this._resetToStandingPose(c.rig);
+        c.state = 'WALKING';
+        c.speed = c.walkSpeed;
+        c.talkCooldown = 18.0 + Math.random() * 12.0;
+        c.decisionCooldown = 10.0 + Math.random() * 10.0;
+        c.partner = null;
+        c.waveTimer = c.waveDuration = 1.2;
+      } else {
+        if (c.faceYaw !== undefined) this._turnTowards(c.mesh, c.faceYaw, 4, delta);
+        const t = nowTime * 4.0 + c.breathPhase;
         if (c.rig) {
-          const r = c.rig;
-          // Legs
-          r.leftLegUpper.rotation.x = Math.sin(phase) * stride;
-          r.leftLegLower.rotation.x = Math.max(0, -Math.sin(phase) * stride * (isJogging ? 1.1 : 0.85));
-
-          r.rightLegUpper.rotation.x = -Math.sin(phase) * stride;
-          r.rightLegLower.rotation.x = Math.max(0, Math.sin(phase) * stride * (isJogging ? 1.1 : 0.85));
-
-          // Arms
-          if (isJogging) {
-            // Athletic 90-degree bent runner arms
-            r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
-            r.leftArmLower.rotation.x = 0.85;
-            r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
-            r.rightArmLower.rotation.x = 0.85;
+          this._applyIdleStance(c, nowTime);
+          if (c.isSpeaker) {
+            c.rig.rightArmUpper.rotation.set(-0.25 + Math.sin(t) * 0.15, 0, -0.1);
+            c.rig.rightArmLower.rotation.set(-(0.9 + Math.cos(t) * 0.25), 0, 0);
+            c.rig.headPivot.rotation.x = 0.04 + Math.sin(t * 0.7) * 0.06;
           } else {
-            r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
-            r.leftArmUpper.rotation.z = 0.06;
-            r.leftArmLower.rotation.x = 0.18 + Math.max(0, -Math.sin(phase) * 0.35);
+            // Listener nods now and then
+            c.rig.headPivot.rotation.x = Math.max(0, Math.sin(t * 0.8)) * 0.1;
+          }
+          c.rig.headPivot.rotation.y = c.lookYaw * 0.5;
+        }
+        c.bubbleSprite.position.y = 2.05 + Math.sin(nowTime * 3) * 0.03;
+      }
+      return;
+    }
 
-            r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
-            r.rightArmUpper.rotation.z = -0.06;
-            r.rightArmLower.rotation.x = 0.18 + Math.max(0, Math.sin(phase) * 0.35);
+    // ==========================================
+    // STATE 6: INDIVIDUAL ACTIONS (Phone, Coffee, Skyline)
+    // ==========================================
+    if (c.state === 'CHECKING_PHONE') {
+      if (c.stateTimer <= 0) {
+        this._resetToStandingPose(c.rig);
+        c.bubbleSprite.visible = false;
+        c.state = 'WALKING';
+        c.speed = c.walkSpeed;
+      } else if (c.rig) {
+        this._applyIdleStance(c, nowTime);
+        c.rig.rightArmUpper.rotation.set(0.1, 0, -0.12);
+        c.rig.rightArmLower.rotation.set(-1.45, 0, 0);
+        c.rig.leftArmUpper.rotation.set(0.1, 0, 0.12);
+        c.rig.leftArmLower.rotation.set(-1.35, 0, 0);
+        c.rig.headPivot.rotation.x = 0.38;
+        c.rig.headPivot.rotation.y = c.lookYaw * 0.3;
+      }
+      return;
+    }
+
+    if (c.state === 'DRINKING_COFFEE') {
+      if (c.stateTimer <= 0) {
+        this._resetToStandingPose(c.rig);
+        c.bubbleSprite.visible = false;
+        c.state = 'WALKING';
+        c.speed = c.walkSpeed;
+      } else if (c.rig) {
+        this._applyIdleStance(c, nowTime);
+        // Lift cup to the lips, sip, lower
+        const sip = Math.max(0, Math.sin((nowTime + c.breathPhase) * 1.2));
+        c.rig.rightArmUpper.rotation.set(-0.15 - sip * 0.2, 0, -0.1);
+        c.rig.rightArmLower.rotation.set(-1.4 - sip * 0.7, 0, 0);
+        c.rig.headPivot.rotation.x = -0.12 * sip;
+      }
+      return;
+    }
+
+    if (c.state === 'LOOKING_AROUND') {
+      if (c.stateTimer <= 0) {
+        this._resetToStandingPose(c.rig);
+        c.bubbleSprite.visible = false;
+        c.state = 'WALKING';
+        c.speed = c.walkSpeed;
+      } else if (c.rig) {
+        this._applyIdleStance(c, nowTime);
+        c.rig.headPivot.rotation.x = -0.1;
+        c.rig.headPivot.rotation.y = Math.sin(nowTime * 1.5) * 0.45 + c.lookYaw;
+      }
+      return;
+    }
+
+    // ==========================================
+    // STATE 7: WALKING OR JOGGING (Dynamic Graph Navigation)
+    // ==========================================
+    const isJogging = (c.state === 'JOGGING');
+    if (isJogging && c.stateTimer <= 0) {
+      c.state = 'WALKING';
+      c.speed = c.walkSpeed;
+      c.bubbleSprite.visible = false;
+      c.decisionCooldown = 15.0 + Math.random() * 10.0;
+    }
+
+    const fromNode = this.nodes[c.currentNodeKey];
+    const toNode = this.nodes[c.targetNodeKey];
+    if (!fromNode || !toNode) return;
+
+    const p1 = fromNode.pos;
+    const p2 = toNode.pos;
+    const segmentDist = p1.distanceTo(p2) || 10;
+
+    // Ease toward target speed; slow down when someone is in the way
+    const crowdFactor = this._computeAvoidance(c, i, delta, playerPos);
+    c.curSpeed += (c.speed * crowdFactor - c.curSpeed) * Math.min(1, delta * 2.5);
+    c.progress += (c.curSpeed * delta) / segmentDist;
+
+    if (c.progress >= 1.0) {
+      // Arrived at target node! Pick next destination autonomously
+      c.currentNodeKey = c.targetNodeKey;
+      c.progress = 0;
+
+      const currentNode = this.nodes[c.currentNodeKey];
+      const options = currentNode.neighbors;
+      c.targetNodeKey = options[Math.floor(Math.random() * options.length)];
+
+      // ----------------------------------------------------
+      // Autonomous Decision Engine ("Do what they like!")
+      // ----------------------------------------------------
+      if (c.decisionCooldown <= 0) {
+        c.decisionCooldown = 12.0 + Math.random() * 16.0;
+
+        // Decision Option A: Sit on a bench in Central Park
+        if (currentNode.district === 'park') {
+          const freeBench = this.benches.find(b => b.occupant === null);
+          if (freeBench && Math.random() < 0.35) {
+            freeBench.occupant = c;
+            c.benchRef = freeBench;
+            c.state = 'SITTING';
+            c.stateTimer = 12.0 + Math.random() * 18.0;
+            const groundY = this.collisionSys
+              ? this.collisionSys.getGroundHeight(freeBench.x, freeBench.z)
+              : 1.85;
+            c.mesh.position.set(freeBench.x, groundY, freeBench.z);
+            c.mesh.rotation.y = freeBench.rot;
+            this._applySittingPose(c.rig);
+            c.bubbleSprite.visible = true;
+            c.bubbleSprite.material.map = this.bubbleTextures.bench;
+            return;
           }
 
-          // Spine and pelvic bounce
-          r.torso.rotation.y = -Math.sin(phase) * 0.08;
-          r.torso.rotation.x = isJogging ? 0.2 : 0.05;
-          r.headPivot.rotation.y = -r.torso.rotation.y * 0.85;
-          r.hips.position.y = 1.35 + Math.abs(Math.sin(phase * 2)) * (isJogging ? 0.12 : 0.06);
-        } else if (c.fbxInstance && this.charLoader) {
-          this.charLoader.animateInstance(c.fbxInstance, isJogging ? 'RUN' : 'WALK', c.animPhase, delta);
+          // Decision Option B: Lie down on soft green grass to sunbathe
+          if (Math.random() < 0.22) {
+            c.state = 'LAYING';
+            c.stateTimer = 10.0 + Math.random() * 12.0;
+            c.mesh.rotation.x = -Math.PI / 2;
+            if (c.rig) c.rig.hips.position.y = 0.28;
+            c.bubbleSprite.visible = true;
+            c.bubbleSprite.material.map = this.bubbleTextures.lay;
+            return;
+          }
         }
 
-        // Check for spontaneous social chat with nearby walking/jogging citizens
-        if (c.talkCooldown <= 0 && !isJogging) {
-          for (let j = i + 1; j < this.allCitizens.length; j++) {
-            const other = this.allCitizens[j];
-            if (other.state !== 'WALKING' || other.talkCooldown > 0) continue;
+        // Decision Option C: Spontaneous Joyful Dance!
+        if (Math.random() < 0.12) {
+          c.state = 'DANCING';
+          c.stateTimer = 4.5 + Math.random() * 3.5;
+          c.bubbleSprite.visible = true;
+          c.bubbleSprite.material.map = this.bubbleTextures.dance;
+          return;
+        }
 
-            const dx = other.mesh.position.x - c.mesh.position.x;
-            const dz = other.mesh.position.z - c.mesh.position.z;
-            const distSq = dx * dx + dz * dz;
+        // Decision Option D: Athletic Jogging sprint
+        if (Math.random() < 0.2) {
+          c.state = 'JOGGING';
+          c.speed = c.jogSpeed;
+          c.stateTimer = 8.0 + Math.random() * 12.0;
+          c.bubbleSprite.visible = true;
+          c.bubbleSprite.material.map = this.bubbleTextures.jog;
+        }
 
-            if (distSq < 4.0) { // ~2 meters
-              if (Math.random() < 0.35) {
-                c.state = 'TALKING';
-                other.state = 'TALKING';
-                c.stateTimer = 5.0 + Math.random() * 2.5;
-                other.stateTimer = c.stateTimer;
+        // Decision Option E: Check phone
+        if (Math.random() < 0.15) {
+          c.state = 'CHECKING_PHONE';
+          c.stateTimer = 3.5;
+          c.bubbleSprite.visible = true;
+          c.bubbleSprite.material.map = this.bubbleTextures.phone;
+          return;
+        }
 
-                c.partner = other;
-                other.partner = c;
+        // Decision Option F: Drink coffee
+        if (Math.random() < 0.15) {
+          c.state = 'DRINKING_COFFEE';
+          c.stateTimer = 3.2;
+          c.bubbleSprite.visible = true;
+          c.bubbleSprite.material.map = this.bubbleTextures.coffee;
+          return;
+        }
 
-                c.isSpeaker = true;
-                other.isSpeaker = false;
+        // Decision Option G: Admire scenic skyline
+        if (Math.random() < 0.15) {
+          c.state = 'LOOKING_AROUND';
+          c.stateTimer = 3.5;
+          c.bubbleSprite.visible = true;
+          c.bubbleSprite.material.map = this.bubbleTextures.city;
+          return;
+        }
+      }
+    }
 
-                // Face each other
-                c.mesh.rotation.y = Math.atan2(dx, dz);
-                other.mesh.rotation.y = Math.atan2(-dx, -dz);
+    // Interpolate position along segment, offset sideways by personal-space steering
+    const targetPos = new THREE.Vector3().lerpVectors(p1, p2, c.progress);
+    targetPos.x += c.avoid.x;
+    targetPos.z += c.avoid.y;
 
-                c.bubbleSprite.visible = true;
-                c.bubbleSprite.material.map = this.bubbleTextures.chat;
+    if (this.collisionSys) {
+      const resolved = this.collisionSys.resolveMovement(
+        c.mesh.position.x,
+        c.mesh.position.z,
+        targetPos.x,
+        targetPos.z,
+        0.28
+      );
+      c.mesh.position.x = resolved.x;
+      c.mesh.position.z = resolved.z;
+    } else {
+      c.mesh.position.x = targetPos.x;
+      c.mesh.position.z = targetPos.z;
+    }
 
-                other.bubbleSprite.visible = true;
-                other.bubbleSprite.material.map = this.bubbleTextures.sparkle;
-                break;
-              } else {
-                // Friendly wave in passing
-                if (c.rig) c.rig.rightArmUpper.rotation.z = -1.6;
-                c.talkCooldown = 6.0;
-              }
-            }
+    // Dynamic surface elevation following
+    const groundY = this.collisionSys
+      ? this.collisionSys.getGroundHeight(c.mesh.position.x, c.mesh.position.z)
+      : targetPos.y;
+    c.mesh.position.y = groundY;
+
+    // Turn smoothly toward travel direction
+    const dirX = p2.x - p1.x;
+    const dirZ = p2.z - p1.z;
+    if (Math.abs(dirX) > 0.001 || Math.abs(dirZ) > 0.001) {
+      this._turnTowards(c.mesh, Math.atan2(dirX, dirZ), c.state === 'JOGGING' ? 8 : 5, delta);
+    }
+
+    this._animateGait(c, c.state === 'JOGGING', delta);
+    this._applyWave(c, delta);
+
+    // Check for spontaneous social chat with nearby walking citizens
+    if (c.talkCooldown <= 0 && c.state === 'WALKING') {
+      for (let j = i + 1; j < this.allCitizens.length; j++) {
+        const other = this.allCitizens[j];
+        if (other.state !== 'WALKING' || other.talkCooldown > 0) continue;
+
+        const dx = other.mesh.position.x - c.mesh.position.x;
+        const dz = other.mesh.position.z - c.mesh.position.z;
+        const distSq = dx * dx + dz * dz;
+
+        if (distSq < 4.0) { // ~2 meters
+          if (Math.random() < 0.35) {
+            c.state = 'TALKING';
+            other.state = 'TALKING';
+            c.stateTimer = 5.0 + Math.random() * 2.5;
+            other.stateTimer = c.stateTimer;
+
+            c.partner = other;
+            other.partner = c;
+
+            c.isSpeaker = true;
+            other.isSpeaker = false;
+
+            // Turn to face each other
+            c.faceYaw = Math.atan2(dx, dz);
+            other.faceYaw = Math.atan2(-dx, -dz);
+
+            c.bubbleSprite.visible = true;
+            c.bubbleSprite.material.map = this.bubbleTextures.chat;
+
+            other.bubbleSprite.visible = true;
+            other.bubbleSprite.material.map = this.bubbleTextures.sparkle;
+            break;
+          } else {
+            // Friendly wave in passing
+            c.waveTimer = c.waveDuration = 1.4;
+            c.talkCooldown = 6.0;
           }
         }
       }
@@ -820,15 +1025,21 @@ export class PedestrianSystem {
     citizen.prevState = citizen.state;
     citizen.state = 'PLAYER_TALKING';
 
-    // Face player
-    if (playerPos) {
+    // Someone lying on the grass gets up to talk
+    if (citizen.prevState === 'LAYING') {
+      citizen.mesh.rotation.x = 0;
+      citizen.prevState = 'WALKING';
+    }
+
+    // Turn toward the player (applied smoothly in update)
+    if (playerPos && citizen.prevState !== 'SITTING') {
       const dx = playerPos.x - citizen.mesh.position.x;
       const dz = playerPos.z - citizen.mesh.position.z;
-      citizen.mesh.rotation.y = Math.atan2(dx, dz);
+      citizen.faceYaw = Math.atan2(dx, dz);
     }
 
     // Friendly greeting wave
-    if (citizen.rig) citizen.rig.rightArmUpper.rotation.z = -2.0;
+    citizen.waveTimer = citizen.waveDuration = 1.6;
     citizen.bubbleSprite.visible = true;
     citizen.bubbleSprite.material.map = this.bubbleTextures.wave;
 
@@ -870,10 +1081,7 @@ export class PedestrianSystem {
     if (!citizen) citizen = this.activePlayerCitizen;
     if (!citizen) return;
 
-    if (citizen.rig) {
-      citizen.rig.rightArmUpper.rotation.z = -2.2;
-      citizen.rig.rightArmLower.rotation.y = 0.5;
-    }
+    citizen.waveTimer = citizen.waveDuration = 1.6;
     citizen.bubbleSprite.visible = true;
     citizen.bubbleSprite.material.map = this.bubbleTextures.wave;
   }

@@ -1042,3 +1042,304 @@ export class LowPolyHuman {
     };
   }
 }
+
+/**
+ * HausaBabbanRiga: detailed low-poly Babban Riga outfit for the LowPolyHuman male rig.
+ *
+ * Adds (all parented to rig joints so everything animates with the skeleton):
+ * - Robe body, sloped shoulder yoke, gold neck piping and white inner collar
+ * - Wide flared sleeves on the upper and lower arm joints, with gold cuffs
+ * - Floor-length robe split in two halves, one on each leg joint, so it swings when walking
+ * - Fold ribs, gold hem bands, embroidered chest panel (canvas texture), left chest pocket
+ * - Wando (trousers) visible below the hem, matching fabric
+ * - Zanna Bukar embroidered cap or wrapped Rawani turban
+ */
+
+const _cache = {};
+
+function makeTexture(key, w, h, draw, repeat) {
+  if (typeof document === 'undefined') return null;
+  if (_cache[key]) return _cache[key];
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if ('colorSpace' in t) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  if (repeat) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repeat[0], repeat[1]);
+  }
+  _cache[key] = t;
+  return t;
+}
+
+const css = hex => '#' + new THREE.Color(hex).getHexString();
+
+function fabricTexture(hex) {
+  return makeTexture('fab' + hex, 128, 128, (g, w, h) => {
+    g.fillStyle = css(hex);
+    g.fillRect(0, 0, w, h);
+    // Subtle tonal damask diamonds
+    g.strokeStyle = 'rgba(255,255,255,0.08)';
+    g.lineWidth = 2;
+    for (let y = 0; y < h; y += 32) {
+      for (let x = 0; x < w; x += 32) {
+        g.beginPath();
+        g.moveTo(x + 16, y + 4);
+        g.lineTo(x + 28, y + 16);
+        g.lineTo(x + 16, y + 28);
+        g.lineTo(x + 4, y + 16);
+        g.closePath();
+        g.stroke();
+      }
+    }
+    // Cotton grain
+    for (let i = 0; i < 1200; i++) {
+      const v = Math.random() > 0.5 ? 255 : 0;
+      g.fillStyle = `rgba(${v},${v},${v},0.035)`;
+      g.fillRect(Math.random() * w, Math.random() * h, 2, 1);
+    }
+  }, [6, 3]);
+}
+
+function weaveBump() {
+  return makeTexture('weave', 16, 16, (g, w, h) => {
+    for (let y = 0; y < h; y += 2) {
+      for (let x = 0; x < w; x += 2) {
+        g.fillStyle = ((x + y) / 2) % 2 ? '#bbbbbb' : '#555555';
+        g.fillRect(x, y, 2, 2);
+      }
+    }
+  }, [28, 14]);
+}
+
+function frontEmbroideryTexture(thread) {
+  return makeTexture('front' + thread, 256, 512, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.strokeStyle = g.fillStyle = css(thread);
+    g.lineCap = g.lineJoin = 'round';
+    g.lineWidth = 8;
+    g.strokeRect(10, 10, w - 20, h - 20);
+    g.lineWidth = 3;
+    g.strokeRect(24, 24, w - 48, h - 48);
+
+    // Hausa knot / eight-point star
+    const cx = w / 2, cy = 120;
+    g.lineWidth = 5;
+    for (let k = 0; k < 2; k++) {
+      g.save();
+      g.translate(cx, cy);
+      g.rotate(k * Math.PI / 4);
+      g.strokeRect(-52, -52, 104, 104);
+      g.restore();
+    }
+    g.beginPath(); g.arc(cx, cy, 34, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.arc(cx, cy, 12, 0, Math.PI * 2); g.fill();
+
+    // Diamond chain down the front
+    for (let i = 0; i < 5; i++) {
+      const y = 250 + i * 52;
+      g.beginPath();
+      g.moveTo(cx, y - 24); g.lineTo(cx + 24, y); g.lineTo(cx, y + 24); g.lineTo(cx - 24, y);
+      g.closePath(); g.stroke();
+      g.beginPath(); g.arc(cx, y, 5, 0, Math.PI * 2); g.fill();
+    }
+
+    // Zig-zag side stitching
+    g.lineWidth = 4;
+    [48, w - 48].forEach(x => {
+      g.beginPath();
+      let n = 0;
+      for (let y = 190; y < h - 40; y += 26, n++) g.lineTo(x + (n % 2 ? 9 : -9), y);
+      g.stroke();
+    });
+  });
+}
+
+function capTexture(capHex, thread) {
+  return makeTexture('cap' + capHex + thread, 256, 64, (g, w, h) => {
+    g.fillStyle = css(capHex);
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = g.fillStyle = css(thread);
+    g.lineWidth = 3;
+    g.fillRect(0, 0, w, 7);
+    g.fillRect(0, h - 7, w, 7);
+    for (let x = 0; x < w; x += 32) {
+      g.beginPath();
+      let n = 0;
+      for (let y = 12; y < h - 10; y += 8, n++) g.lineTo(x + 16 + (n % 2 ? 5 : -5), y);
+      g.stroke();
+      g.beginPath();
+      g.moveTo(x, 32); g.lineTo(x + 6, 26); g.lineTo(x + 12, 32); g.lineTo(x + 6, 38);
+      g.closePath(); g.fill();
+    }
+  });
+}
+
+export class HausaBabbanRiga {
+  /**
+   * @param {Object} rig  Rig returned by LowPolyHuman.create() (male)
+   * @param {Object} opts robeColor, threadColor, capColor, trouserColor, turban (bool)
+   */
+  static dress(rig, opts = {}) {
+    const { torso, leftArmUpper, leftArmLower, rightArmUpper, rightArmLower,
+      leftLegUpper, rightLegUpper, headPivot } = rig;
+
+    const robeHex = opts.robeColor ?? rig.materials.primary.color.getHex();
+    const threadHex = opts.threadColor ?? 0xd9a521;
+    const capHex = opts.capColor ?? 0xf8fafc;
+    const trouserHex = opts.trouserColor ?? new THREE.Color(robeHex).multiplyScalar(0.85).getHex();
+
+    // ---------- Materials ----------
+    const robeMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, map: fabricTexture(robeHex), bumpMap: weaveBump(), bumpScale: 0.4,
+      roughness: 0.85, flatShading: true, side: THREE.DoubleSide
+    });
+    if (!robeMat.map) robeMat.color.set(robeHex);
+
+    const foldMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(robeHex).multiplyScalar(0.8), roughness: 0.9, flatShading: true
+    });
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: threadHex, metalness: 0.75, roughness: 0.3, flatShading: true, side: THREE.DoubleSide
+    });
+    const collarMat = new THREE.MeshStandardMaterial({
+      color: 0xf8fafc, roughness: 0.7, flatShading: true, side: THREE.DoubleSide
+    });
+    const panelTex = frontEmbroideryTexture(threadHex);
+    const panelMat = new THREE.MeshStandardMaterial({
+      map: panelTex, transparent: true, alphaTest: 0.35, metalness: 0.5, roughness: 0.35,
+      color: panelTex ? 0xffffff : threadHex
+    });
+
+    rig.materials.pants.color.set(trouserHex);
+
+    const mk = (geo, mat, x = 0, y = 0, z = 0) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.castShadow = true;
+      return m;
+    };
+    const oct = geo => { geo.rotateY(Math.PI / 8); return geo; };
+
+    // ---------- Upper body ----------
+    // Robe body (open-ended, flat face toward the front)
+    torso.add(mk(oct(new THREE.CylinderGeometry(0.47, 0.41, 1.05, 8, 1, true)), robeMat, 0, 0.375, 0));
+
+    // Sloped shoulder yoke
+    torso.add(mk(oct(new THREE.CylinderGeometry(0.20, 0.47, 0.12, 8, 1, true)), robeMat, 0, 0.86, 0));
+
+    // Gold shoulder seam and neck piping
+    torso.add(mk(oct(new THREE.CylinderGeometry(0.476, 0.476, 0.025, 8, 1, true)), goldMat, 0, 0.80, 0));
+    const piping = mk(new THREE.TorusGeometry(0.205, 0.015, 5, 8), goldMat, 0, 0.92, 0);
+    piping.rotation.x = Math.PI / 2;
+    torso.add(piping);
+
+    // White inner collar
+    torso.add(mk(new THREE.CylinderGeometry(0.20, 0.22, 0.08, 8, 1, true), collarMat, 0, 0.95, 0));
+
+    // Embroidered chest panel
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.62), panelMat);
+    panel.position.set(0, 0.44, 0.425);
+    panel.rotation.x = 0.057;
+    torso.add(panel);
+
+    // Left chest pocket (wearer's left = +x), on the angled face
+    const pocket = mk(new THREE.BoxGeometry(0.15, 0.17, 0.025), foldMat, 0.22, 0.42, 0.398);
+    pocket.rotation.y = Math.PI / 4;
+    torso.add(pocket);
+    const pocketStitch = mk(new THREE.BoxGeometry(0.155, 0.015, 0.03), goldMat, 0.22, 0.51, 0.404);
+    pocketStitch.rotation.y = Math.PI / 4;
+    torso.add(pocketStitch);
+
+    // ---------- Wide flared sleeves ----------
+    [[leftArmUpper, leftArmLower], [rightArmUpper, rightArmLower]].forEach(([up, low]) => {
+      up.add(mk(new THREE.CylinderGeometry(0.17, 0.21, 0.46, 8, 1, true), robeMat, 0, -0.23, 0));
+      low.add(mk(new THREE.CylinderGeometry(0.21, 0.30, 0.40, 8, 1, true), robeMat, 0, -0.20, 0));
+      low.add(mk(new THREE.CylinderGeometry(0.296, 0.303, 0.05, 8, 1, true), goldMat, 0, -0.375, 0));
+    });
+
+    // ---------- Floor-length robe: one half per leg ----------
+    [leftLegUpper, rightLegUpper].forEach(leg => {
+      const isLeft = leg === leftLegUpper;
+      const ts = isLeft ? 0 : Math.PI;          // left half covers x > 0
+      const off = -leg.position.x;              // center the half-cylinder on the body axis
+
+      leg.add(mk(new THREE.CylinderGeometry(0.40, 0.50, 1.45, 8, 1, true, ts, Math.PI), robeMat, off, -0.425, 0));
+      leg.add(mk(new THREE.CylinderGeometry(0.50, 0.505, 0.07, 8, 1, true, ts, Math.PI), goldMat, off, -1.115, 0));
+      leg.add(mk(new THREE.CylinderGeometry(0.492, 0.494, 0.03, 8, 1, true, ts, Math.PI), goldMat, off, -1.0, 0));
+
+      // Fold ribs along the vertices
+      for (let k = 1; k <= 3; k++) {
+        const th = ts + k * Math.PI / 4;
+        const rib = mk(new THREE.BoxGeometry(0.025, 1.4, 0.02), foldMat,
+          off + 0.455 * Math.sin(th), -0.425, 0.455 * Math.cos(th));
+        rib.rotation.order = 'YXZ';
+        rib.rotation.y = th;
+        rib.rotation.x = -0.069;
+        leg.add(rib);
+      }
+    });
+
+    // ---------- Headwear ----------
+    if (opts.turban) this.addRawani(headPivot, opts.turbanColor ?? 0xf8fafc);
+    else this.addZannaCap(headPivot, capHex, threadHex);
+
+    return rig;
+  }
+
+  /** Embroidered Zanna Bukar cap */
+  static addZannaCap(headPivot, capHex = 0xf8fafc, threadHex = 0xd9a521) {
+    const tex = capTexture(capHex, threadHex);
+    const side = new THREE.MeshStandardMaterial({
+      color: tex ? 0xffffff : capHex, map: tex, roughness: 0.7, flatShading: true, side: THREE.DoubleSide
+    });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.27, 0.30, 12, 1, true), side);
+    body.position.y = 0.65;
+    body.castShadow = true;
+    headPivot.add(body);
+
+    const top = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.31, 0.31, 0.02, 12),
+      new THREE.MeshStandardMaterial({ color: capHex, roughness: 0.7, flatShading: true })
+    );
+    top.position.y = 0.80;
+    headPivot.add(top);
+
+    const trim = new THREE.Mesh(
+      new THREE.TorusGeometry(0.31, 0.012, 5, 12),
+      new THREE.MeshStandardMaterial({ color: threadHex, metalness: 0.7, roughness: 0.3, flatShading: true })
+    );
+    trim.rotation.x = Math.PI / 2;
+    trim.position.y = 0.80;
+    headPivot.add(trim);
+  }
+
+  /** Wrapped Rawani turban with a trailing tail */
+  static addRawani(headPivot, hex = 0xf8fafc) {
+    const mat = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.85, flatShading: true });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.29, 0.20, 10), mat);
+    base.position.y = 0.60;
+    headPivot.add(base);
+
+    [0.54, 0.62, 0.70].forEach((y, i) => {
+      const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.31 - i * 0.012, 0.055, 6, 12), mat);
+      wrap.rotation.x = Math.PI / 2;
+      wrap.rotation.z = i * 0.4;
+      wrap.position.y = y;
+      wrap.scale.set(1, 1, 1.05);
+      headPivot.add(wrap);
+    });
+
+    const crown = new THREE.Mesh(new THREE.SphereGeometry(0.29, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+    crown.position.y = 0.70;
+    headPivot.add(crown);
+
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.44, 0.04), mat);
+    tail.position.set(0.22, 0.42, -0.14);
+    tail.rotation.set(0.1, 0.4, -0.12);
+    headPivot.add(tail);
+  }
+}

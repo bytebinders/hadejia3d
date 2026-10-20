@@ -317,7 +317,7 @@ class MetropolisApp {
     this.monorailSys.update(delta);
     this.skySys.update(time, delta);
     if (this.playerCtrl) this.playerCtrl.update(delta);
-    if (this.pedestrianSys) this.pedestrianSys.update(delta);
+    if (this.pedestrianSys) this.pedestrianSys.update(delta, this.playerCtrl?.mesh?.position);
     if (this.networkMgr) this.networkMgr.update(delta);
     if (this.cityMap) this.cityMap.update();
     if (this.virtualJoystick) this.virtualJoystick.update();

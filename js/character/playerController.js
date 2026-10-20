@@ -292,9 +292,9 @@ export class PlayerController {
     r.rightLegUpper.rotation.x = -Math.PI / 2 + 0.1;
     r.rightLegLower.rotation.x = Math.PI / 2 - 0.1;
     r.leftArmUpper.rotation.x = -0.6;
-    r.leftArmLower.rotation.x = 0.5;
+    r.leftArmLower.rotation.x = -0.5;
     r.rightArmUpper.rotation.x = -0.6;
-    r.rightArmLower.rotation.x = 0.5;
+    r.rightArmLower.rotation.x = -0.5;
   }
 
   /**
@@ -795,11 +795,11 @@ export class PlayerController {
         // Natural arm swing with organic elbow flexion on forward swing
         r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
         r.leftArmUpper.rotation.z = 0.06;
-        r.leftArmLower.rotation.x = 0.18 + Math.max(0, -Math.sin(phase) * 0.38);
+        r.leftArmLower.rotation.x = -(0.18 + Math.max(0, -Math.sin(phase) * 0.38));
 
         r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
         r.rightArmUpper.rotation.z = -0.06;
-        r.rightArmLower.rotation.x = 0.18 + Math.max(0, Math.sin(phase) * 0.38);
+        r.rightArmLower.rotation.x = -(0.18 + Math.max(0, Math.sin(phase) * 0.38));
 
         // Natural pelvic list, subtle hip twist and spinal counter-rotation
         r.hips.position.y = 1.35 + Math.abs(Math.sin(phase * 2)) * 0.06;
@@ -828,11 +828,11 @@ export class PlayerController {
         // Athletic bent runner arms pumping
         r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
         r.leftArmUpper.rotation.z = 0.12;
-        r.leftArmLower.rotation.x = 0.85;
+        r.leftArmLower.rotation.x = -0.85;
 
         r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
         r.rightArmUpper.rotation.z = -0.12;
-        r.rightArmLower.rotation.x = 0.85;
+        r.rightArmLower.rotation.x = -0.85;
 
         // Forward athletic torso tilt & dynamic bounce
         r.torso.rotation.x = 0.24;
@@ -868,9 +868,9 @@ export class PlayerController {
         r.rightLegLower.rotation.x = Math.PI / 2 - 0.1;
 
         r.leftArmUpper.rotation.x = -0.4;
-        r.leftArmLower.rotation.x = 0.6;
+        r.leftArmLower.rotation.x = -0.6;
         r.rightArmUpper.rotation.x = -0.4;
-        r.rightArmLower.rotation.x = 0.6;
+        r.rightArmLower.rotation.x = -0.6;
 
         r.torso.rotation.x = -0.05;
         break;
@@ -932,11 +932,11 @@ export class PlayerController {
         // Relaxed natural arm hang with subtle elbow flexion
         r.leftArmUpper.rotation.x = 0.06 + breath * 0.03;
         r.leftArmUpper.rotation.z = 0.07;
-        r.leftArmLower.rotation.x = 0.22;
+        r.leftArmLower.rotation.x = -0.22;
 
         r.rightArmUpper.rotation.x = 0.06 + breath * 0.03;
         r.rightArmUpper.rotation.z = -0.07;
-        r.rightArmLower.rotation.x = 0.22;
+        r.rightArmLower.rotation.x = -0.22;
 
         // Subtle lifelike gaze micro-movement
         r.headPivot.rotation.y = microGlance * 0.08;
