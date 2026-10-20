@@ -1,4 +1,4 @@
-server.js
+server/
 cert.pem
 key.pem
 *.log

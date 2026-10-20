@@ -8,6 +8,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
 
 const PORT = process.env.PORT || 3000;
 
@@ -43,8 +44,9 @@ function handleHttpRequest(req, res) {
 
   // Look in multiple candidate locations
   const candidatePaths = [
-    path.join(__dirname, safePath),
+    path.join(rootDir, safePath),
     path.join(process.cwd(), safePath),
+    path.join(__dirname, safePath),
     path.resolve(safePath)
   ];
 
@@ -59,7 +61,7 @@ function handleHttpRequest(req, res) {
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
       // Fallback to index.html for SPA routing if available
-      const fallbackIndex = path.join(__dirname, 'index.html');
+      const fallbackIndex = path.join(rootDir, 'index.html');
       if (fs.existsSync(fallbackIndex)) {
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
@@ -92,8 +94,8 @@ const server = http.createServer(handleHttpRequest);
 
 let httpsServer = null;
 const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
-const certPath = path.join(__dirname, 'cert.pem');
-const keyPath = path.join(__dirname, 'key.pem');
+const certPath = path.join(rootDir, 'cert.pem');
+const keyPath = path.join(rootDir, 'key.pem');
 
 if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
   try {
