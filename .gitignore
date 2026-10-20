@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Local SSL Certificate & Private Key
+cert.pem
+key.pem
+
+# Environment & OS files
+.env
+.env.local
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vercel deployment cache
+.vercel/

@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hadejia 3D — Jigawa State, Nigeria</title>
+  <meta name="description"
+    content="Authentic 3D interactive simulation of Hadejia, Jigawa State, Nigeria. Explore Fadar Sarkin Hadejia (Emir's Palace), Masallacin Juma'a, Kogin Hadejia, Babban Kasuwa, and Hadejia-Nguru Wetlands.">
+  <meta name="keywords" content="hadejia, jigawa, nigeria, threejs, webgl, 3d city, low poly, hausa, fulani, emirs palace, hadejia river">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;600;700&display=swap"
+    rel="stylesheet">
+
+  <link rel="stylesheet" href="./css/style.css">
+
+  <!-- Three.js import map (self-contained for Vercel & local execution) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./js/vendor/three.module.js",
+      "three/addons/controls/OrbitControls.js": "./js/vendor/OrbitControls.js",
+      "three/addons/": "./js/vendor/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <!-- 3D Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Loading Screen -->
+  <div id="loader" class="loader-overlay">
+    <div class="loader-content">
+      <div class="loader-city-icon">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="12,54 12,24 24,14 36,24 36,54" fill="#38bdf8" opacity="0.9" />
+          <polygon points="36,54 36,18 46,8 56,18 56,54" fill="#818cf8" opacity="0.9" />
+          <polygon points="2,54 2,36 12,26 12,54" fill="#06b6d4" opacity="0.8" />
+          <rect x="18" y="26" width="4" height="4" fill="#fef08a" />
+          <rect x="26" y="26" width="4" height="4" fill="#fef08a" />
+          <rect x="18" y="36" width="4" height="4" fill="#fef08a" />
+          <rect x="26" y="36" width="4" height="4" fill="#fef08a" />
+          <rect x="42" y="20" width="4" height="4" fill="#fef08a" />
+          <rect x="48" y="20" width="4" height="4" fill="#fef08a" />
+          <rect x="42" y="30" width="4" height="4" fill="#fef08a" />
+          <rect x="48" y="30" width="4" height="4" fill="#fef08a" />
+          <line x1="0" y1="54" x2="64" y2="54" stroke="#e2e8f0" stroke-width="3" />
+        </svg>
+      </div>
+      <h1 class="loader-title">HADEJIA<span class="highlight">3D</span></h1>
+      <p class="loader-subtitle">Generating historic Hadejia, Jigawa State, Nigeria...</p>
+      <div class="loader-bar-bg">
+        <div id="loader-progress" class="loader-bar-fill"></div>
+      </div>
+      <div id="loader-status" class="loader-status-text">Constructing districts...</div>
+    </div>
+  </div>
+
+  <!-- UI Overlay Header / Glass HUD -->
+  <header class="hud-header glass-panel">
+    <div class="brand">
+      <div class="brand-badge">JIGAWA STATE</div>
+      <span class="brand-name">HADEJIA<span class="highlight">3D</span></span>
+    </div>
+
+    <!-- Live City Metrics -->
+    <div class="metrics-bar">
+      <div class="metric-item" title="Simulated Local Time">
+        <span class="metric-icon" id="metric-time-icon">☀️</span>
+        <span class="metric-label">TIME</span>
+        <span class="metric-val" id="metric-time">12:00</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item" title="Simulated Hadejia Urban Population">
+        <span class="metric-icon">👥</span>
+        <span class="metric-label">POPULATION</span>
+        <span class="metric-val" id="metric-citizens">214,800</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item" title="Active Vehicles in Traffic">
+        <span class="metric-icon">🚗</span>
+        <span class="metric-label">TRAFFIC</span>
+        <span class="metric-val" id="metric-traffic">36 Units</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item" title="Rendering Framerate">
+        <span class="metric-icon">⚡</span>
+        <span class="metric-label">FPS</span>
+        <span class="metric-val" id="metric-fps">60</span>
+      </div>
+      <div class="metric-divider"></div>
+      <div class="metric-item metric-players" id="metric-players-item" title="Connected Players on Same Wi-Fi">
+        <span class="metric-icon">🌐</span>
+        <span class="metric-label">ONLINE</span>
+        <span class="metric-val highlight-green" id="metric-players">1 Player</span>
+      </div>
+    </div>
+
+    <!-- Quick Audio & Help Buttons -->
+    <div class="header-actions">
+      <button id="btn-voice-toggle" class="icon-btn voice-btn" title="Toggle Proximity Voice Chat (V)"
+        aria-label="Toggle Voice Chat">
+        <span id="voice-icon">🎙️</span>
+        <span id="voice-btn-label" class="voice-btn-label">Mic Off</span>
+        <kbd class="map-kbd">V</kbd>
+      </button>
+      <button id="btn-toggle-map" class="icon-btn highlight-map" title="Toggle Interactive City Map (M)"
+        aria-label="Toggle City Map">
+        <span class="map-btn-icon">🗺️</span>
+        <span class="map-btn-label">Map</span>
+        <kbd class="map-kbd">M</kbd>
+      </button>
+      <button id="btn-audio-toggle" class="icon-btn" title="Toggle Procedural Ambient City Audio"
+        aria-label="Audio Toggle">
+        <span id="audio-icon">🔇</span>
+      </button>
+      <button id="btn-fullscreen" class="icon-btn" title="Toggle Fullscreen" aria-label="Fullscreen">
+        ⛶
+      </button>
+    </div>
+  </header>
+
+  <!-- Bottom-Left Live GPS Minimap Widget -->
+  <div id="minimap-widget" class="minimap-widget glass-panel">
+    <div class="minimap-header">
+      <span class="minimap-title">GPS RADAR</span>
+      <div class="minimap-actions">
+        <button id="btn-expand-map" class="minimap-btn" title="Expand Full Map (M)">⛶</button>
+        <button id="btn-toggle-minimap" class="minimap-btn" title="Remove Minimap">✕</button>
+      </div>
+    </div>
+    <div class="minimap-canvas-wrapper">
+      <canvas id="minimap-canvas" width="160" height="160"></canvas>
+    </div>
+  </div>
+
+  <!-- Right Control Panel Drawer -->
+  <aside id="controls-panel" class="controls-drawer glass-panel">
+    <div class="drawer-header">
+      <h2>CITY CONTROLS</h2>
+      <button id="btn-collapse-drawer" class="btn-text-icon" title="Toggle Panel">−</button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- Time of Day Section -->
+      <div class="control-group">
+        <div class="control-label-row">
+          <label for="time-slider">TIME OF DAY</label>
+          <span id="time-display" class="badge">12:00</span>
+        </div>
+        <div class="time-quick-pills">
+          <button class="pill-btn" data-time="7">Dawn</button>
+          <button class="pill-btn active" data-time="12">Day</button>
+          <button class="pill-btn" data-time="18.5">Sunset</button>
+          <button class="pill-btn" data-time="22">Night</button>
+        </div>
+        <input type="range" id="time-slider" min="0" max="24" step="0.1" value="12" class="slider-input">
+        <div class="control-toggle-row">
+          <span>Auto Sun Cycle</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-day-cycle">
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Weather Section -->
+      <div class="control-group">
+        <label>ATMOSPHERE & WEATHER</label>
+        <div class="weather-selector">
+          <button class="weather-btn active" data-weather="sunny">
+            <span>☀️</span> Clear
+          </button>
+          <button class="weather-btn" data-weather="rain">
+            <span>🌧️</span> Rain
+          </button>
+          <button class="weather-btn" data-weather="fog">
+            <span>🌫️</span> Neon Mist
+          </button>
+        </div>
+      </div>
+
+      <!-- Simulation Dynamic Controls -->
+      <div class="control-group">
+        <label>SIMULATION ELEMENTS</label>
+        <div class="control-toggle-row">
+          <span>Road Traffic</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-traffic" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <div class="control-toggle-row">
+          <span>Elevated Monorail</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-monorail" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <div class="control-toggle-row">
+          <span>Sky Zeppelin & Clouds</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-clouds" checked>
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <div class="control-toggle-row">
+          <span>Auto-Rotate Camera</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-autorotate">
+            <span class="slider round"></span>
+          </label>
+        </div>
+        <div class="control-toggle-row">
+          <span>Mobile Joystick</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-joystick">
+            <span class="slider round"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Procedural Re-generate -->
+      <div class="control-group">
+        <label>GENERATOR</label>
+        <button id="btn-regenerate" class="action-btn glow-btn">
+          <span>🎲</span> Generate New City Seed
+        </button>
+        <button id="btn-reset-cam" class="action-btn secondary-btn">
+          <span>🔄</span> Reset Camera
+        </button>
+      </div>
+
+      <!-- Same Wi-Fi LAN Multiplayer -->
+      <div class="control-group multiplayer-card">
+        <div class="control-label-row">
+          <label>SAME WI-FI MULTIPLAYER</label>
+          <span id="mp-status-pill" class="badge badge-online">● ACTIVE</span>
+        </div>
+        <p class="mp-description">
+          Open on any phone, laptop, or tablet connected to your Wi-Fi:
+        </p>
+        <div class="mp-url-box">
+          <div class="mp-url-row">
+            <input type="text" id="wifi-url-input" readonly value="http://10.22.142.209:3000" class="mp-url-input">
+            <button id="btn-copy-wifi-url" class="btn-copy" title="Copy Wi-Fi Join URL">📋 Copy</button>
+          </div>
+        </div>
+        <div class="mp-chat-row">
+          <input type="text" id="mp-chat-input" placeholder="Type message in 3D chat..." maxlength="60" class="mp-chat-input">
+          <button id="btn-send-chat" class="btn-chat-send" title="Send speech bubble">💬</button>
+        </div>
+      </div>
+
+      <!-- Interactive Instructions Hint -->
+      <div class="info-tip">
+        <strong>💡 Pro Tip:</strong> Click any building to inspect its architectural specs and tenant data. Drag with
+        Left-Click to orbit, Right-Click to pan, and Scroll to zoom.
+      </div>
+    </div>
+  </aside>
+
+  <!-- Interactive Building Inspection Card (Floating Glass Popover) -->
+  <div id="inspector-card" class="inspector-card glass-panel hidden">
+    <div class="card-header">
+      <div class="card-tag" id="card-district">FINANCIAL DISTRICT</div>
+      <button id="btn-close-inspector" class="btn-close" aria-label="Close Inspector">×</button>
+    </div>
+    <h3 id="card-title" class="card-title">Apex Celestial Tower</h3>
+    <p id="card-desc" class="card-desc">Iconic low-poly corporate headquarters featuring stepped glass volumes and a
+      rooftop communications array.</p>
+
+    <div class="card-stats-grid">
+      <div class="stat-box">
+        <span class="stat-label">HEIGHT</span>
+        <span class="stat-value" id="card-height">148 m</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">FLOORS</span>
+        <span class="stat-value" id="card-floors">38 LVL</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">ENERGY RATING</span>
+        <span class="stat-value highlight-green" id="card-rating">A+ Eco</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">OCCUPANCY</span>
+        <span class="stat-value" id="card-occupancy">94%</span>
+      </div>
+    </div>
+
+    <div class="card-tenants">
+      <span class="tenants-label">KEY TENANTS:</span>
+      <div class="tenant-tags" id="card-tenants">
+        <span class="tenant-tag">Apex Global</span>
+        <span class="tenant-tag">Synapse AI</span>
+        <span class="tenant-tag">Hyperion Labs</span>
+      </div>
+    </div>
+
+    <div class="card-actions">
+      <button id="btn-focus-building" class="card-action-btn">
+        <span>🔍</span> Focus Camera
+      </button>
+    </div>
+  </div>
+
+  <!-- Player Control HUD & Action Bar -->
+  <div id="player-hud" class="player-hud glass-panel">
+    <div class="player-hud-header">
+      <span class="player-avatar">🏃‍♂️</span>
+      <div class="player-info">
+        <span class="player-name">CITIZEN EXPLORER</span>
+        <span id="player-state-badge" class="badge">IDLE</span>
+      </div>
+    </div>
+    <div class="player-actions">
+      <button id="btn-player-run" class="action-pill" title="Run / Sprint">
+        <span class="pill-icon">⚡</span> Run <kbd>Shift</kbd>
+      </button>
+      <button id="btn-player-jump" class="action-pill" title="Jump">
+        <span class="pill-icon">🦘</span> Jump <kbd>Space</kbd>
+      </button>
+      <button id="btn-player-sit" class="action-pill" title="Sit Down">
+        <span class="pill-icon">🪑</span> Sit <kbd>C</kbd>
+      </button>
+      <button id="btn-player-lay" class="action-pill" title="Lay Down">
+        <span class="pill-icon">🛌</span> Lay <kbd>X</kbd>
+      </button>
+      <button id="btn-player-wave" class="action-pill" title="Wave Hand">
+        <span class="pill-icon">👋</span> Wave <kbd>G</kbd>
+      </button>
+      <button id="btn-player-talk" class="action-pill glow-talk" title="Talk to Nearby Citizen">
+        <span class="pill-icon">💬</span> <span id="btn-talk-text">Talk</span> <kbd>T</kbd>
+      </button>
+      <button id="btn-player-voice" class="action-pill glow-voice" title="Toggle Microphone Voice Chat (V)">
+        <span class="pill-icon" id="player-voice-icon">🎙️</span> <span id="btn-player-voice-text">Voice Mic</span> <kbd>V</kbd>
+      </button>
+      <button id="btn-player-dance" class="action-pill" title="Dance">
+        <span class="pill-icon">🕺🏼</span> Dance <kbd>B</kbd>
+      </button>
+      <button id="btn-player-car" class="action-pill glow-car" title="Enter or Exit Nearest Vehicle">
+        <span class="pill-icon">🚗</span> <span id="btn-car-text">Drive Car</span> <kbd>E</kbd>
+      </button>
+    </div>
+    <div class="player-controls-hint">
+      <span>Move/Drive: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+      <span>Voice: <kbd>V</kbd></span>
+      <span>Talk: <kbd>T</kbd></span>
+      <span>Wave: <kbd>G</kbd></span>
+      <span>Dance: <kbd>B</kbd></span>
+    </div>
+  </div>
+
+  <!-- Mobile Virtual Controls Layer (Joystick, Look Zone & Action Buttons) -->
+  <div id="mobile-controls-container" class="mobile-controls-layer desktop-hidden">
+    <!-- Full-screen touch look zone (right half of screen) -->
+    <div id="mobile-touch-look-zone" class="mobile-touch-look-zone"></div>
+
+    <!-- Bottom-Left Virtual Joystick -->
+    <div id="virtual-joystick-zone" class="virtual-joystick-zone">
+      <div id="joystick-base" class="joystick-base">
+        <div class="joystick-ring"></div>
+        <div class="joystick-arrow arrow-up">▲</div>
+        <div class="joystick-arrow arrow-down">▼</div>
+        <div class="joystick-arrow arrow-left">◀</div>
+        <div class="joystick-arrow arrow-right">▶</div>
+        <div id="joystick-knob" class="joystick-knob">
+          <div class="knob-dot"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom-Right Ergonomic Action Buttons Cluster -->
+    <div id="mobile-actions-cluster" class="mobile-actions-cluster">
+      <div class="mobile-actions-row">
+        <button id="btn-m-more" class="m-action-btn m-btn-secondary" title="More Actions">⋯</button>
+        <button id="btn-m-voice" class="m-action-btn m-btn-voice" title="Toggle Voice Chat">🎙️</button>
+        <button id="btn-m-talk" class="m-action-btn m-btn-talk" title="Talk to Citizen">💬</button>
+        <button id="btn-m-car" class="m-action-btn m-btn-car" title="Drive / Exit Car">🚗</button>
+      </div>
+      <div class="mobile-actions-row main-actions">
+        <button id="btn-m-run" class="m-action-btn m-btn-run" title="Toggle Sprint">⚡</button>
+        <button id="btn-m-jump" class="m-action-btn m-btn-jump" title="Jump">🦘</button>
+      </div>
+
+      <!-- Quick More Actions Tray (Popup) -->
+      <div id="mobile-more-tray" class="mobile-more-tray glass-panel hidden">
+        <button id="btn-m-sit" class="m-tray-btn"><span>🪑</span> Sit</button>
+        <button id="btn-m-lay" class="m-tray-btn"><span>🛌</span> Lay</button>
+        <button id="btn-m-wave" class="m-tray-btn"><span>👋</span> Wave</button>
+        <button id="btn-m-dance" class="m-tray-btn"><span>🕺</span> Dance</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Proximity Vehicle Interaction Prompt -->
+  <div id="vehicle-prompt" class="vehicle-prompt glass-panel hidden">
+    <span class="prompt-icon">🚗</span>
+    <span id="vehicle-prompt-text" class="prompt-text">Nearby Vehicle — Press <kbd>E</kbd> to Drive</span>
+  </div>
+
+  <!-- Proximity Citizen Interaction Prompt -->
+  <div id="citizen-prompt" class="citizen-prompt glass-panel hidden">
+    <span class="prompt-icon">💬</span>
+    <span id="citizen-prompt-text" class="prompt-text">Nearby Citizen — Press <kbd>T</kbd> to Talk</span>
+  </div>
+
+  <!-- Real-Time Proximity Voice Status Bar -->
+  <div id="voice-proximity-bar" class="voice-proximity-bar glass-panel hidden">
+    <div class="voice-proximity-icon-wrap">
+      <span id="voice-proximity-icon" class="voice-proximity-icon">🔊</span>
+      <span class="voice-pulse-ring"></span>
+    </div>
+    <div class="voice-proximity-info">
+      <div class="voice-proximity-speaker-row">
+        <span id="voice-proximity-speaker" class="voice-speaker-name">Player</span>
+        <span id="voice-proximity-dist" class="voice-speaker-dist">12m away</span>
+      </div>
+      <span id="voice-proximity-desc" class="voice-speaker-desc">Audible • 75% volume</span>
+    </div>
+    <div class="voice-proximity-meter">
+      <div id="voice-proximity-level" class="voice-proximity-level" style="width: 75%;"></div>
+    </div>
+  </div>
+
+  <!-- Glassmorphism Citizen Dialogue Modal -->
+  <div id="citizen-dialogue-modal" class="citizen-dialogue-modal glass-panel hidden">
+    <div class="dialogue-header">
+      <div class="dialogue-avatar" id="dialogue-avatar">👑</div>
+      <div class="dialogue-meta">
+        <span class="dialogue-name" id="dialogue-name">Ibrahim Sambo</span>
+        <span class="dialogue-title" id="dialogue-title">Hakimin Masarauta (District Head)</span>
+      </div>
+      <button id="btn-close-dialogue" class="btn-close-dialogue" title="Close">✕</button>
+    </div>
+    <div class="dialogue-body">
+      <p id="dialogue-text">"Sannu da zuwa Hadejia! Welcome to our historic city in Jigawa State. Explore Fadar Sarki, Kogin Hadejia, and Babban Kasuwa!"</p>
+    </div>
+    <div class="dialogue-actions">
+      <button id="btn-dialogue-next" class="dialogue-btn"><span>💡</span> Tell Me More</button>
+      <button id="btn-dialogue-wave" class="dialogue-btn"><span>👋</span> Wave Back</button>
+      <button id="btn-dialogue-bye" class="dialogue-btn"><span>✨</span> Goodbye</button>
+    </div>
+  </div>
+
+  <!-- Microphone Security Requirement Modal (for plain HTTP LAN IPs) -->
+  <div id="mic-security-modal" class="mic-security-modal glass-panel hidden">
+    <div class="mic-modal-header">
+      <div class="mic-modal-icon">🎙️</div>
+      <div class="mic-modal-title-group">
+        <h3>Microphone Requires Secure Context</h3>
+        <span class="mic-modal-subtitle">Browser Security Policy (HTTPS or Localhost)</span>
+      </div>
+      <button id="btn-close-mic-modal" class="btn-close-dialogue" title="Close">✕</button>
+    </div>
+    <div class="mic-modal-body">
+      <p>Modern browsers (Chrome, Edge, Safari) protect user privacy by <strong>disabling microphone access on unencrypted LAN HTTP IP addresses</strong> (e.g. <code>http://10.22.142.209:3000/</code>).</p>
+      <div class="mic-options-grid">
+        <a id="link-mic-localhost" href="http://localhost:3000/" class="mic-solution-card">
+          <div class="card-icon">💻</div>
+          <div class="card-content">
+            <strong>Playing on this computer?</strong>
+            <span>Switch to <code>http://localhost:3000/</code> — microphone is enabled immediately on localhost!</span>
+          </div>
+        </a>
+        <a id="link-mic-https" href="https://10.22.142.209:3443/" class="mic-solution-card highlight">
+          <div class="card-icon">📱</div>
+          <div class="card-content">
+            <strong>Playing on Wi-Fi device (Phone / Laptop)?</strong>
+            <span>Switch to <code>https://10.22.142.209:3443/</code> (Secure HTTPS).<br><small><em>(Click "Advanced → Proceed" on the initial browser warning)</em></small></span>
+          </div>
+        </a>
+      </div>
+    </div>
+    <div class="mic-modal-footer">
+      <button id="btn-dismiss-mic-modal" class="dialogue-btn"><span>👍</span> Understood</button>
+    </div>
+  </div>
+
+  <!-- Interactive Tactical City Map Modal -->
+  <div id="city-map-modal" class="city-map-modal glass-panel hidden">
+    <div class="map-modal-header">
+      <div class="map-modal-title">
+        <span class="map-title-icon">🗺️</span>
+        <div>
+          <h3>HADEJIA DISTRICT MAP</h3>
+          <span class="map-title-sub">Live GPS Navigation • Jigawa State, Nigeria • Press <kbd>M</kbd> or <kbd>Esc</kbd> to Close</span>
+        </div>
+      </div>
+      <div class="map-modal-actions">
+        <button id="btn-map-track-player" class="map-ctrl-btn active" title="Center on Player">📍 Track</button>
+        <button id="btn-close-map" class="btn-close-modal" title="Remove / Close Map">✕</button>
+      </div>
+    </div>
+
+    <div class="map-canvas-container">
+      <canvas id="city-map-canvas" width="620" height="620"></canvas>
+      <div class="map-compass" title="North">▲ N</div>
+    </div>
+
+    <!-- Map Legend Bar -->
+    <div class="map-legend">
+      <div class="legend-item"><span class="legend-dot dot-player"></span> You</div>
+      <div class="legend-item"><span class="legend-dot dot-remote"></span> Remote Player</div>
+      <div class="legend-item"><span class="legend-dot dot-citizens"></span> Hadejia Citizen</div>
+      <div class="legend-item"><span class="legend-dot dot-traffic"></span> Keke Napep</div>
+      <div class="legend-item"><span class="legend-dot dot-park"></span> Fadamar Hadejia</div>
+      <div class="legend-item"><span class="legend-dot dot-water"></span> Kogin Hadejia</div>
+    </div>
+
+    <!-- Fast-Travel District Navigation Buttons -->
+    <div class="map-districts-bar">
+      <span class="districts-label">QUICK FAST-TRAVEL:</span>
+      <button class="district-jump-btn" data-x="-60" data-z="-25">👑 Fadar Sarkin Hadejia</button>
+      <button class="district-jump-btn" data-x="-10" data-z="-25">🕌 Masallacin Juma'a</button>
+      <button class="district-jump-btn" data-x="-10" data-z="25">🌴 Fadamar Hadejia</button>
+      <button class="district-jump-btn" data-x="-60" data-z="25">🧺 Babban Kasuwa & Kifi</button>
+      <button class="district-jump-btn" data-x="-85" data-z="0">🚪 Kofar Yamma Gate</button>
+      <button class="district-jump-btn" data-x="88" data-z="0">🦅 Hadejia Wetlands</button>
+    </div>
+  </div>
+
+  <!-- Bottom Notification Pill -->
+  <div id="toast-notification" class="toast-pill hidden">
+    <span id="toast-icon">✨</span>
+    <span id="toast-text">Camera locked to High-Speed Monorail</span>
+  </div>
+
+  <!-- Main Application Script (ES Module) -->
+  <script type="module" src="./js/main.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,855 @@
+import * as THREE from 'three';
+import { LowPolyHuman } from './lowPolyHuman.js';
+
+/**
+ * PedestrianSystem — Fully Autonomous Metropolis Citizens with Free Will
+ * 
+ * Zero static roles. Every citizen has complete autonomy and freedom to:
+ * - Wander anywhere across the city graph (Park, Downtown, Marina, Bridges, East Island)
+ * - Switch paths at intersections and decide their own travel destinations
+ * - Walk at a relaxed stroll or sprint/jog for fitness
+ * - Choose to walk over to open park benches, sit down to rest, and stand back up whenever they feel ready
+ * - Choose to lie down on the green grass in Central Park to sunbathe or cloud-watch, then get up
+ * - Stop to chat with any other citizen they meet, gesturing and sharing 3D speech bubbles
+ * - Burst into spontaneous joyful dances on the sidewalks
+ * - Pause to check smartphones, sip takeaway coffee, or gaze at the skyline
+ * - Interact, greet, and converse with the player whenever approached!
+ */
+
+const CITIZEN_NAMES = [
+  'Ibrahim Sambo', 'Amina Hadejia', 'Usman Danladi', 'Fatima Zahra', 'Bello Kofar-Fada',
+  'Hadiza Sambo', 'Aminu Garba', 'Zainab Kabir', 'Haruna Babba', 'Maryam Dutse',
+  'Kabir Aliyu', 'Halima Binta', 'Mustapha Sanusi', 'Rahma Sadau', 'Idrisu Mai-Kifi',
+  'Hauwa\'u Kabir', 'Sanusi Abdullahi', 'Bilkisu Garba', 'Farouk Lawan', 'Jamila Abdullahi',
+  'Yakubu Shehu', 'Nafisa Umar', 'Nasiru Garki', 'Safiya Usman', 'Dahiru Auyo',
+  'Asiya Danbatta', 'Salisu Kafin-Hausa', 'Rukayya Bello', 'Umar Faruq', 'Zubaida Aliyu',
+  'Abubakar Saddiq', 'Khadija Haruna', 'Bashir Suleiman', 'Sa\'adatu Idris', 'Murtala Muhammad'
+];
+
+const CITIZEN_TITLES = [
+  'Hakimin Masarauta (District Head)',
+  'Babban Masunta (Master Fisherman of Kogin Hadejia)',
+  'Dillalin Kasuwar Kifi (Fish Market Merchant)',
+  'Mai Unguwa (Ward Elder)',
+  'Dogarin Sarki (Royal Emirate Guard)',
+  'Manomin Dabino da Shinkafa (Date & Rice Farmer)',
+  'Malamin Madrasah (Islamic Heritage Scholar)',
+  'Masakin Gargajiya (Traditional Babban Riga Weaver)',
+  'Direban Keke Napep (City Tricycle Driver)',
+  'Mai Shayin Kasuwa (Kasuwa Tea & Bread Host)',
+  'Jami\'in Fadamar Hadejia (Wetlands Wildlife Ranger)',
+  'Dukawa Master Craftsman (Traditional Leather Guild)',
+  'Mai Fura da Nono (Pastoralist Dairy Merchant)',
+  'Magatakardar Masarauta (Emirate Scribe)'
+];
+
+const CITIZEN_AVATARS = ['👑', '🕌', '🐟', '🌴', '🛺', '🌾', '🧕', '👳', '🍵', '🪡', '📜', '🦅'];
+
+export class PedestrianSystem {
+  constructor(scene, collisionSys = null) {
+    this.scene = scene;
+    this.collisionSys = collisionSys;
+    this.group = new THREE.Group();
+    this.group.name = 'PedestrianSystem';
+    this.scene.add(this.group);
+
+    this.allCitizens = [];
+    this.activePlayerCitizen = null;
+
+    // Pre-create shared canvas textures for 3D speech bubbles
+    this.bubbleTextures = {
+      chat: this._createBubbleTexture('💬'),
+      phone: this._createBubbleTexture('📱'),
+      coffee: this._createBubbleTexture('☕'),
+      city: this._createBubbleTexture('🏙️'),
+      wave: this._createBubbleTexture('👋'),
+      sparkle: this._createBubbleTexture('✨'),
+      bench: this._createBubbleTexture('🪑'),
+      lay: this._createBubbleTexture('🛌'),
+      dance: this._createBubbleTexture('🕺'),
+      jog: this._createBubbleTexture('🏃')
+    };
+
+    // Metropolis Bench network in Central Park
+    this.benches = [
+      { id: 'bench_1', x: -16.8, z: 25, rot: Math.PI / 2, occupant: null },
+      { id: 'bench_2', x: -3.2,  z: 25, rot: -Math.PI / 2, occupant: null },
+      { id: 'bench_3', x: -10,   z: 18.2, rot: Math.PI, occupant: null },
+      { id: 'bench_4', x: -10,   z: 31.8, rot: 0, occupant: null }
+    ];
+
+    // Interconnected City-Wide Waypoint Graph
+    this._initCityWaypointGraph();
+
+    // Spawn 35 fully autonomous citizens
+    this.spawnPedestrians(35);
+  }
+
+  /**
+   * Helper to draw clean 3D speech bubble canvas textures
+   */
+  _createBubbleTexture(emojiText) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+
+    // Soft bubble shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 4;
+
+    // Rounded bubble body
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(14, 14, 100, 72, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    // Pointer tail
+    ctx.beginPath();
+    ctx.moveTo(54, 86);
+    ctx.lineTo(64, 104);
+    ctx.lineTo(74, 86);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    ctx.fill();
+    ctx.stroke();
+
+    // Emoji icon
+    ctx.shadowColor = 'transparent';
+    ctx.font = '36px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emojiText, 64, 50);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  _attachSpeechBubble(mesh) {
+    const spriteMat = new THREE.SpriteMaterial({
+      map: this.bubbleTextures.chat,
+      transparent: true,
+      depthTest: false
+    });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.scale.set(0.65, 0.65, 1);
+    sprite.position.set(0, 2.05, 0);
+    sprite.visible = false;
+    mesh.add(sprite);
+    return sprite;
+  }
+
+  /**
+   * Constructs an interconnected multi-district waypoint graph.
+   * Citizens navigate from node to node, choosing any adjacent direction at will!
+   */
+  _initCityWaypointGraph() {
+    this.nodes = {
+      // 1. Central Park Core (elevated grass 1.85, pathways 1.87)
+      'park_west':       { pos: new THREE.Vector3(-25, 1.87, 25), neighbors: ['park_fountain', 'park_nw', 'park_sw', 'street_b_park'], district: 'park' },
+      'park_fountain':   { pos: new THREE.Vector3(-10, 1.87, 25), neighbors: ['park_west', 'park_east', 'park_north', 'park_south'], district: 'park' },
+      'park_east':       { pos: new THREE.Vector3(8,   1.87, 25), neighbors: ['park_fountain', 'park_ne', 'park_se', 'marina_mid'], district: 'park' },
+      'park_north':      { pos: new THREE.Vector3(-10, 1.85, 40), neighbors: ['park_fountain', 'park_nw', 'park_ne'], district: 'park' },
+      'park_south':      { pos: new THREE.Vector3(-10, 1.85, 10), neighbors: ['park_fountain', 'park_sw', 'park_se'], district: 'park' },
+      'park_nw':         { pos: new THREE.Vector3(-25, 1.85, 40), neighbors: ['park_west', 'park_north', 'street_b_south'], district: 'park' },
+      'park_ne':         { pos: new THREE.Vector3(5,   1.85, 40), neighbors: ['park_east', 'park_north'], district: 'park' },
+      'park_sw':         { pos: new THREE.Vector3(-25, 1.85, 10), neighbors: ['park_west', 'park_south', 'street_b_north'], district: 'park' },
+      'park_se':         { pos: new THREE.Vector3(5,   1.85, 10), neighbors: ['park_east', 'park_south'], district: 'park' },
+
+      // 2. Street B & Park Transition (sidewalk 1.40)
+      'street_b_park':   { pos: new THREE.Vector3(-32, 1.40, 25), neighbors: ['park_west', 'street_b_north', 'street_b_south'], district: 'downtown' },
+      'street_b_north':  { pos: new THREE.Vector3(-32, 1.40, -42), neighbors: ['street_b_park', 'downtown_mid_n', 'bridge_n_west'], district: 'downtown' },
+      'street_b_south':  { pos: new THREE.Vector3(-32, 1.40, 42),  neighbors: ['street_b_park', 'arts_mid_s', 'bridge_s_west'], district: 'downtown' },
+
+      // 3. Downtown Financial Core
+      'downtown_nw':     { pos: new THREE.Vector3(-80, 1.40, -42), neighbors: ['downtown_mid_n', 'downtown_sw'], district: 'downtown' },
+      'downtown_mid_n':  { pos: new THREE.Vector3(-55, 1.40, -42), neighbors: ['downtown_nw', 'street_b_north', 'downtown_mid_s'], district: 'downtown' },
+      'downtown_mid_s':  { pos: new THREE.Vector3(-55, 1.40, -8),  neighbors: ['downtown_mid_n', 'downtown_sw', 'street_b_park'], district: 'downtown' },
+      'downtown_sw':     { pos: new THREE.Vector3(-80, 1.40, -8),  neighbors: ['downtown_nw', 'downtown_mid_s'], district: 'downtown' },
+
+      // 4. Arts Quarter Promenade
+      'arts_nw':         { pos: new THREE.Vector3(-76, 1.40, 12), neighbors: ['arts_mid_n', 'arts_sw'], district: 'downtown' },
+      'arts_mid_n':      { pos: new THREE.Vector3(-44, 1.40, 12), neighbors: ['arts_nw', 'street_b_park', 'arts_mid_s'], district: 'downtown' },
+      'arts_mid_s':      { pos: new THREE.Vector3(-44, 1.40, 38), neighbors: ['arts_mid_n', 'arts_sw', 'street_b_south'], district: 'downtown' },
+      'arts_sw':         { pos: new THREE.Vector3(-76, 1.40, 38), neighbors: ['arts_nw', 'arts_mid_s'], district: 'downtown' },
+
+      // 5. Marina Waterfront Boardwalk (wooden pier 1.40)
+      'marina_north':    { pos: new THREE.Vector3(33, 1.40, -45), neighbors: ['marina_mid', 'bridge_n_west'], district: 'marina' },
+      'marina_mid':      { pos: new THREE.Vector3(33, 1.40, 0),   neighbors: ['marina_north', 'marina_south', 'park_east'], district: 'marina' },
+      'marina_south':    { pos: new THREE.Vector3(33, 1.40, 45),  neighbors: ['marina_mid', 'bridge_s_west'], district: 'marina' },
+
+      // 6. North Canal Bridge (elevation rises to 1.97 over canal)
+      'bridge_n_west':   { pos: new THREE.Vector3(20, 1.47, -50), neighbors: ['marina_north', 'bridge_n_mid', 'street_b_north'], district: 'marina' },
+      'bridge_n_mid':    { pos: new THREE.Vector3(50, 1.97, -50), neighbors: ['bridge_n_west', 'bridge_n_east'], district: 'marina' },
+      'bridge_n_east':   { pos: new THREE.Vector3(80, 1.47, -50), neighbors: ['bridge_n_mid', 'east_boulevard_n'], district: 'marina' },
+
+      // 7. South Canal Bridge
+      'bridge_s_west':   { pos: new THREE.Vector3(20, 1.47, 50), neighbors: ['marina_south', 'bridge_s_mid', 'street_b_south'], district: 'marina' },
+      'bridge_s_mid':    { pos: new THREE.Vector3(50, 1.97, 50), neighbors: ['bridge_s_west', 'bridge_s_east'], district: 'marina' },
+      'bridge_s_east':   { pos: new THREE.Vector3(80, 1.47, 50), neighbors: ['bridge_s_mid', 'east_boulevard_s'], district: 'marina' },
+
+      // 8. East Island Boulevard & Tech Campus
+      'east_boulevard_n': { pos: new THREE.Vector3(88, 1.40, -42), neighbors: ['bridge_n_east', 'east_boulevard_mid'], district: 'marina' },
+      'east_boulevard_mid': { pos: new THREE.Vector3(88, 1.40, 0), neighbors: ['east_boulevard_n', 'east_boulevard_s'], district: 'marina' },
+      'east_boulevard_s': { pos: new THREE.Vector3(88, 1.40, 42),  neighbors: ['east_boulevard_mid', 'bridge_s_east'], district: 'marina' }
+    };
+
+    this.nodeKeys = Object.keys(this.nodes);
+  }
+
+  _generateDialogue(district = 'general') {
+    const fadamaLines = [
+      "Sannu da zuwa Fadamar Hadejia! The date palms (Kwanan Dabino) produce the sweetest dates in Jigawa.",
+      "Resting under the shady neem trees (Dogon Yaro) is our favorite afternoon tradition.",
+      "The fresh breeze from the Hadejia floodplain keeps the entire oasis cool even in the dry season.",
+      "Have you seen the traditional well (Rijiyar Fadama)? It has provided water for generations of travelers."
+    ];
+
+    const palaceLines = [
+      "Ranki ya dade / Ranka ya dade! Welcome to Fadar Sarkin Hadejia, seat of the historic Emirate founded in 1808.",
+      "Look at the royal Dogarai guards at Kofar Fada in their scarlet red and emerald green regalia!",
+      "The Central Friday Mosque (Masallacin Juma'a) stands tall with its majestic twin minarets and green dome.",
+      "Babban Kasuwar Hadejia has the finest textiles, hand-embroidered Babban Riga, and local pottery."
+    ];
+
+    const riverLines = [
+      "Ina kwana! Kogin Hadejia (Hadejia River) is teeming with fresh fish. Our fishermen use traditional Kwalekwale canoes.",
+      "Barka dai! The famous Kasuwar Kifi (Fish Market) ships smoked fish across Northern and Southern Nigeria.",
+      "Across the bridge lies the Hadejia-Nguru Wetlands, a world-famous Ramsar sanctuary for migratory birds from Europe and Asia!",
+      "You can see our traditional wooden dugouts anchored along the riverbank."
+    ];
+
+    const generalLines = [
+      "Sannu! Barka da zuwa Hadejia, Jigawa State! Enjoy exploring our historic city.",
+      "Lafiya lau! If you want to greet someone in Hausa, wave with [G] or celebrate with [V]!",
+      "Watch out for the yellow Keke Napep tricycles cruising along the avenues.",
+      "From Kofar Yamma to Kofar Kware, our ancient city gates have guarded Hadejia for centuries."
+    ];
+
+    if (district === 'park') return [...fadamaLines, ...generalLines];
+    if (district === 'downtown') return [...palaceLines, ...generalLines];
+    if (district === 'marina') return [...riverLines, ...generalLines];
+    return generalLines;
+  }
+
+  spawnPedestrians(count = 35) {
+    this.clear();
+
+    for (let i = 0; i < count; i++) {
+      const palette = LowPolyHuman.getRandomPalette();
+      const rig = LowPolyHuman.create({ palette });
+      const mesh = rig.root;
+
+      // Pick random initial node on the city graph
+      const startNodeKey = this.nodeKeys[i % this.nodeKeys.length];
+      const startNode = this.nodes[startNodeKey];
+      const targetNodeKey = startNode.neighbors[Math.floor(Math.random() * startNode.neighbors.length)];
+
+      const groundY = this.collisionSys
+        ? this.collisionSys.getGroundHeight(startNode.pos.x, startNode.pos.z)
+        : startNode.pos.y;
+      mesh.position.set(startNode.pos.x, groundY, startNode.pos.z);
+
+      const name = CITIZEN_NAMES[i % CITIZEN_NAMES.length];
+      const title = CITIZEN_TITLES[i % CITIZEN_TITLES.length];
+      const avatar = CITIZEN_AVATARS[i % CITIZEN_AVATARS.length];
+      const dialogueLines = this._generateDialogue(startNode.district);
+
+      const bubbleSprite = this._attachSpeechBubble(mesh);
+
+      const citizen = {
+        id: `citizen_${i}`,
+        rig,
+        mesh,
+        name,
+        title,
+        avatar,
+        dialogueLines,
+        dialogueIndex: 0,
+        bubbleSprite,
+
+        // Graph Navigation
+        currentNodeKey: startNodeKey,
+        targetNodeKey: targetNodeKey,
+        progress: Math.random() * 0.8, // Stagger them along path
+        walkSpeed: 2.3 + Math.random() * 1.2,
+        jogSpeed: 5.4 + Math.random() * 1.4,
+        speed: 2.5,
+
+        // Autonomous State: 'WALKING', 'JOGGING', 'SITTING', 'LAYING', 'TALKING', 'DANCING',
+        // 'CHECKING_PHONE', 'DRINKING_COFFEE', 'LOOKING_AROUND', 'PLAYER_TALKING'
+        state: 'WALKING',
+        stateTimer: 0,
+        decisionCooldown: 4.0 + Math.random() * 8.0,
+        talkCooldown: 5.0 + Math.random() * 8.0,
+
+        // Social partner if conversing with another citizen
+        partner: null,
+        isSpeaker: false,
+        benchRef: null,
+
+        animPhase: Math.random() * Math.PI * 2
+      };
+
+      // Initially assign 3 random citizens to sit on benches if available
+      if (i < 3 && this.benches[i]) {
+        const b = this.benches[i];
+        b.occupant = citizen;
+        citizen.benchRef = b;
+        citizen.state = 'SITTING';
+        citizen.stateTimer = 12.0 + Math.random() * 15.0;
+        mesh.position.set(b.x, groundY, b.z);
+        mesh.rotation.y = b.rot;
+        this._applySittingPose(citizen.rig);
+      }
+
+      this.group.add(mesh);
+      this.allCitizens.push(citizen);
+    }
+  }
+
+  _applySittingPose(rig) {
+    rig.hips.position.y = 0.72;
+    rig.hips.position.z = -0.2;
+    rig.leftLegUpper.rotation.x = -Math.PI / 2 + 0.1;
+    rig.leftLegLower.rotation.x = Math.PI / 2 - 0.1;
+    rig.rightLegUpper.rotation.x = -Math.PI / 2 + 0.1;
+    rig.rightLegLower.rotation.x = Math.PI / 2 - 0.1;
+    rig.leftArmUpper.rotation.x = -0.3;
+    rig.leftArmLower.rotation.x = 0.5;
+    rig.rightArmUpper.rotation.x = -0.3;
+    rig.rightArmLower.rotation.x = 0.5;
+  }
+
+  _resetToStandingPose(rig) {
+    rig.hips.position.set(0, 1.35, 0);
+    rig.hips.rotation.set(0, 0, 0);
+    rig.torso.rotation.set(0, 0, 0);
+    rig.headPivot.rotation.set(0, 0, 0);
+    rig.leftArmUpper.rotation.set(0, 0, 0);
+    rig.leftArmLower.rotation.set(0, 0, 0);
+    rig.rightArmUpper.rotation.set(0, 0, 0);
+    rig.rightArmLower.rotation.set(0, 0, 0);
+    rig.leftLegUpper.rotation.set(0, 0, 0);
+    rig.leftLegLower.rotation.set(0, 0, 0);
+    rig.rightLegUpper.rotation.set(0, 0, 0);
+    rig.rightLegLower.rotation.set(0, 0, 0);
+  }
+
+  update(delta) {
+    if (!this.allCitizens.length) return;
+    const nowTime = performance.now() * 0.001;
+
+    for (let i = 0; i < this.allCitizens.length; i++) {
+      const c = this.allCitizens[i];
+
+      // Decrement timers
+      if (c.talkCooldown > 0) c.talkCooldown -= delta;
+      if (c.decisionCooldown > 0) c.decisionCooldown -= delta;
+      if (c.stateTimer > 0) c.stateTimer -= delta;
+
+      // ==========================================
+      // STATE 1: PLAYER_TALKING (Interacting with Player)
+      // ==========================================
+      if (c.state === 'PLAYER_TALKING') {
+        const t = nowTime * 4.0;
+        c.rig.rightArmUpper.rotation.x = -0.4 + Math.sin(t) * 0.2;
+        c.rig.rightArmLower.rotation.x = 0.6;
+        c.rig.headPivot.rotation.x = 0.06;
+        c.bubbleSprite.visible = true;
+        c.bubbleSprite.material.map = this.bubbleTextures.chat;
+        continue;
+      }
+
+      // ==========================================
+      // STATE 2: SITTING (On Central Park Bench)
+      // ==========================================
+      if (c.state === 'SITTING') {
+        // Occasionally glance around or check phone while seated
+        const t = nowTime * 1.5;
+        c.rig.headPivot.rotation.y = Math.sin(t) * 0.25;
+
+        // When well rested, stand up and choose where to explore next!
+        if (c.stateTimer <= 0) {
+          if (c.benchRef) {
+            c.benchRef.occupant = null;
+            c.benchRef = null;
+          }
+          this._resetToStandingPose(c.rig);
+          c.bubbleSprite.visible = false;
+          c.state = 'WALKING';
+          c.speed = c.walkSpeed;
+          c.decisionCooldown = 15.0 + Math.random() * 15.0;
+
+          // Pick destination from park fountain
+          c.currentNodeKey = 'park_fountain';
+          const node = this.nodes['park_fountain'];
+          c.targetNodeKey = node.neighbors[Math.floor(Math.random() * node.neighbors.length)];
+          c.progress = 0;
+        }
+        continue;
+      }
+
+      // ==========================================
+      // STATE 3: LAYING (Sunbathing on Park Grass)
+      // ==========================================
+      if (c.state === 'LAYING') {
+        if (c.stateTimer <= 0) {
+          // Stand up and resume walking
+          c.mesh.rotation.x = 0;
+          this._resetToStandingPose(c.rig);
+          c.bubbleSprite.visible = false;
+          c.state = 'WALKING';
+          c.speed = c.walkSpeed;
+          c.decisionCooldown = 18.0 + Math.random() * 15.0;
+        }
+        continue;
+      }
+
+      // ==========================================
+      // STATE 4: DANCING (Spontaneous street dance)
+      // ==========================================
+      if (c.state === 'DANCING') {
+        if (c.stateTimer <= 0) {
+          this._resetToStandingPose(c.rig);
+          c.bubbleSprite.visible = false;
+          c.state = 'WALKING';
+          c.speed = c.walkSpeed;
+          c.decisionCooldown = 20.0 + Math.random() * 15.0;
+        } else {
+          // Play energetic dance animation
+          const t = nowTime * 6.5;
+          c.rig.hips.position.x = Math.sin(t) * 0.14;
+          c.rig.hips.rotation.y = Math.sin(t) * 0.32;
+          c.rig.leftArmUpper.rotation.z = 1.1 + Math.sin(t) * 0.45;
+          c.rig.leftArmUpper.rotation.x = Math.cos(t) * 0.55;
+          c.rig.rightArmUpper.rotation.z = -1.1 - Math.sin(t) * 0.45;
+          c.rig.rightArmUpper.rotation.x = -Math.cos(t) * 0.55;
+          c.rig.headPivot.rotation.z = -Math.sin(t) * 0.22;
+        }
+        continue;
+      }
+
+      // ==========================================
+      // STATE 5: TALKING (NPC-to-NPC Social Chat)
+      // ==========================================
+      if (c.state === 'TALKING') {
+        if (c.stateTimer <= 0) {
+          // Wave goodbye and resume wandering
+          c.bubbleSprite.visible = false;
+          this._resetToStandingPose(c.rig);
+          c.state = 'WALKING';
+          c.speed = c.walkSpeed;
+          c.talkCooldown = 18.0 + Math.random() * 12.0;
+          c.decisionCooldown = 10.0 + Math.random() * 10.0;
+          c.partner = null;
+        } else {
+          const t = nowTime * 4.0;
+          if (c.isSpeaker) {
+            c.rig.rightArmUpper.rotation.x = -0.45 + Math.sin(t) * 0.24;
+            c.rig.rightArmLower.rotation.x = 0.65 + Math.cos(t) * 0.22;
+            c.rig.headPivot.rotation.x = 0.08 + Math.sin(t * 0.7) * 0.06;
+          } else {
+            c.rig.rightArmUpper.rotation.x = 0.06;
+            c.rig.rightArmLower.rotation.x = 0.22;
+            c.rig.headPivot.rotation.x = Math.max(0, Math.sin(t * 0.8) * 0.08);
+          }
+          c.bubbleSprite.position.y = 2.05 + Math.sin(nowTime * 3) * 0.03;
+        }
+        continue;
+      }
+
+      // ==========================================
+      // STATE 6: INDIVIDUAL ACTIONS (Phone, Coffee, Skyline)
+      // ==========================================
+      if (c.state === 'CHECKING_PHONE') {
+        if (c.stateTimer <= 0) {
+          this._resetToStandingPose(c.rig);
+          c.bubbleSprite.visible = false;
+          c.state = 'WALKING';
+          c.speed = c.walkSpeed;
+        } else {
+          c.rig.rightArmUpper.rotation.x = -0.65;
+          c.rig.rightArmLower.rotation.x = 1.15;
+          c.rig.leftArmUpper.rotation.x = -0.4;
+          c.rig.leftArmLower.rotation.x = 0.85;
+          c.rig.headPivot.rotation.x = 0.32;
+        }
+        continue;
+      }
+
+      if (c.state === 'DRINKING_COFFEE') {
+        if (c.stateTimer <= 0) {
+          this._resetToStandingPose(c.rig);
+          c.bubbleSprite.visible = false;
+          c.state = 'WALKING';
+          c.speed = c.walkSpeed;
+        } else {
+          c.rig.rightArmUpper.rotation.x = -0.8;
+          c.rig.rightArmLower.rotation.x = 1.3;
+          c.rig.headPivot.rotation.x = -0.12;
+        }
+        continue;
+      }
+
+      if (c.state === 'LOOKING_AROUND') {
+        if (c.stateTimer <= 0) {
+          this._resetToStandingPose(c.rig);
+          c.bubbleSprite.visible = false;
+          c.state = 'WALKING';
+          c.speed = c.walkSpeed;
+        } else {
+          c.rig.headPivot.rotation.y = Math.sin(nowTime * 1.5) * 0.45;
+        }
+        continue;
+      }
+
+      // ==========================================
+      // STATE 7: WALKING OR JOGGING (Dynamic Graph Navigation)
+      // ==========================================
+      const isJogging = (c.state === 'JOGGING');
+      if (isJogging && c.stateTimer <= 0) {
+        c.state = 'WALKING';
+        c.speed = c.walkSpeed;
+        c.bubbleSprite.visible = false;
+        c.decisionCooldown = 15.0 + Math.random() * 10.0;
+      }
+
+      const fromNode = this.nodes[c.currentNodeKey];
+      const toNode = this.nodes[c.targetNodeKey];
+
+      if (fromNode && toNode) {
+        const p1 = fromNode.pos;
+        const p2 = toNode.pos;
+        const segmentDist = p1.distanceTo(p2) || 10;
+
+        c.progress += (c.speed * delta) / segmentDist;
+
+        if (c.progress >= 1.0) {
+          // Arrived at target node! Pick next destination autonomously
+          c.currentNodeKey = c.targetNodeKey;
+          c.progress = 0;
+
+          const currentNode = this.nodes[c.currentNodeKey];
+          const options = currentNode.neighbors;
+          c.targetNodeKey = options[Math.floor(Math.random() * options.length)];
+
+          // ----------------------------------------------------
+          // Autonomous Decision Engine ("Do what they like!")
+          // ----------------------------------------------------
+          if (c.decisionCooldown <= 0) {
+            c.decisionCooldown = 12.0 + Math.random() * 16.0;
+
+            // Decision Option A: Sit on a bench in Central Park
+            if (currentNode.district === 'park') {
+              const freeBench = this.benches.find(b => b.occupant === null);
+              if (freeBench && Math.random() < 0.35) {
+                freeBench.occupant = c;
+                c.benchRef = freeBench;
+                c.state = 'SITTING';
+                c.stateTimer = 12.0 + Math.random() * 18.0;
+                const groundY = this.collisionSys
+                  ? this.collisionSys.getGroundHeight(freeBench.x, freeBench.z)
+                  : 1.85;
+                c.mesh.position.set(freeBench.x, groundY, freeBench.z);
+                c.mesh.rotation.y = freeBench.rot;
+                this._applySittingPose(c.rig);
+                c.bubbleSprite.visible = true;
+                c.bubbleSprite.material.map = this.bubbleTextures.bench;
+                continue;
+              }
+
+              // Decision Option B: Lie down on soft green grass to sunbathe
+              if (Math.random() < 0.22) {
+                c.state = 'LAYING';
+                c.stateTimer = 10.0 + Math.random() * 12.0;
+                c.mesh.rotation.x = -Math.PI / 2;
+                c.rig.hips.position.y = 0.28;
+                c.bubbleSprite.visible = true;
+                c.bubbleSprite.material.map = this.bubbleTextures.lay;
+                continue;
+              }
+            }
+
+            // Decision Option C: Spontaneous Joyful Dance!
+            if (Math.random() < 0.12) {
+              c.state = 'DANCING';
+              c.stateTimer = 4.5 + Math.random() * 3.5;
+              c.bubbleSprite.visible = true;
+              c.bubbleSprite.material.map = this.bubbleTextures.dance;
+              continue;
+            }
+
+            // Decision Option D: Athletic Jogging sprint
+            if (Math.random() < 0.2) {
+              c.state = 'JOGGING';
+              c.speed = c.jogSpeed;
+              c.stateTimer = 8.0 + Math.random() * 12.0;
+              c.bubbleSprite.visible = true;
+              c.bubbleSprite.material.map = this.bubbleTextures.jog;
+            }
+
+            // Decision Option E: Check phone
+            if (Math.random() < 0.15) {
+              c.state = 'CHECKING_PHONE';
+              c.stateTimer = 3.5;
+              c.bubbleSprite.visible = true;
+              c.bubbleSprite.material.map = this.bubbleTextures.phone;
+              continue;
+            }
+
+            // Decision Option F: Drink coffee
+            if (Math.random() < 0.15) {
+              c.state = 'DRINKING_COFFEE';
+              c.stateTimer = 3.2;
+              c.bubbleSprite.visible = true;
+              c.bubbleSprite.material.map = this.bubbleTextures.coffee;
+              continue;
+            }
+
+            // Decision Option G: Admire scenic skyline
+            if (Math.random() < 0.15) {
+              c.state = 'LOOKING_AROUND';
+              c.stateTimer = 3.5;
+              c.bubbleSprite.visible = true;
+              c.bubbleSprite.material.map = this.bubbleTextures.city;
+              continue;
+            }
+          }
+        }
+
+        // Interpolate position along segment
+        const targetPos = new THREE.Vector3().lerpVectors(p1, p2, c.progress);
+
+        if (this.collisionSys) {
+          const resolved = this.collisionSys.resolveMovement(
+            c.mesh.position.x,
+            c.mesh.position.z,
+            targetPos.x,
+            targetPos.z,
+            0.28
+          );
+          c.mesh.position.x = resolved.x;
+          c.mesh.position.z = resolved.z;
+        } else {
+          c.mesh.position.x = targetPos.x;
+          c.mesh.position.z = targetPos.z;
+        }
+
+        // Dynamic surface elevation following
+        const groundY = this.collisionSys
+          ? this.collisionSys.getGroundHeight(c.mesh.position.x, c.mesh.position.z)
+          : targetPos.y;
+        c.mesh.position.y = groundY;
+
+        // Facing orientation toward travel direction
+        const dirX = p2.x - p1.x;
+        const dirZ = p2.z - p1.z;
+        if (Math.abs(dirX) > 0.001 || Math.abs(dirZ) > 0.001) {
+          c.mesh.rotation.y = Math.atan2(dirX, dirZ);
+        }
+
+        // Procedural gait animation
+        const animSpeed = isJogging ? c.speed * 2.2 : c.speed * 2.8;
+        c.animPhase += delta * animSpeed;
+        const phase = c.animPhase;
+        const stride = isJogging ? 0.95 : 0.58;
+        const armSwing = isJogging ? 0.9 : 0.5;
+        const r = c.rig;
+
+        // Legs
+        r.leftLegUpper.rotation.x = Math.sin(phase) * stride;
+        r.leftLegLower.rotation.x = Math.max(0, -Math.sin(phase) * stride * (isJogging ? 1.1 : 0.85));
+
+        r.rightLegUpper.rotation.x = -Math.sin(phase) * stride;
+        r.rightLegLower.rotation.x = Math.max(0, Math.sin(phase) * stride * (isJogging ? 1.1 : 0.85));
+
+        // Arms
+        if (isJogging) {
+          // Athletic 90-degree bent runner arms
+          r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
+          r.leftArmLower.rotation.x = 0.85;
+          r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
+          r.rightArmLower.rotation.x = 0.85;
+        } else {
+          r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
+          r.leftArmUpper.rotation.z = 0.06;
+          r.leftArmLower.rotation.x = 0.18 + Math.max(0, -Math.sin(phase) * 0.35);
+
+          r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
+          r.rightArmUpper.rotation.z = -0.06;
+          r.rightArmLower.rotation.x = 0.18 + Math.max(0, Math.sin(phase) * 0.35);
+        }
+
+        // Spine and pelvic bounce
+        r.torso.rotation.y = -Math.sin(phase) * 0.08;
+        r.torso.rotation.x = isJogging ? 0.2 : 0.05;
+        r.headPivot.rotation.y = -r.torso.rotation.y * 0.85;
+        r.hips.position.y = 1.35 + Math.abs(Math.sin(phase * 2)) * (isJogging ? 0.12 : 0.06);
+
+        // Check for spontaneous social chat with nearby walking/jogging citizens
+        if (c.talkCooldown <= 0 && !isJogging) {
+          for (let j = i + 1; j < this.allCitizens.length; j++) {
+            const other = this.allCitizens[j];
+            if (other.state !== 'WALKING' || other.talkCooldown > 0) continue;
+
+            const dx = other.mesh.position.x - c.mesh.position.x;
+            const dz = other.mesh.position.z - c.mesh.position.z;
+            const distSq = dx * dx + dz * dz;
+
+            if (distSq < 4.0) { // ~2 meters
+              if (Math.random() < 0.35) {
+                c.state = 'TALKING';
+                other.state = 'TALKING';
+                c.stateTimer = 5.0 + Math.random() * 2.5;
+                other.stateTimer = c.stateTimer;
+
+                c.partner = other;
+                other.partner = c;
+
+                c.isSpeaker = true;
+                other.isSpeaker = false;
+
+                // Face each other
+                c.mesh.rotation.y = Math.atan2(dx, dz);
+                other.mesh.rotation.y = Math.atan2(-dx, -dz);
+
+                c.bubbleSprite.visible = true;
+                c.bubbleSprite.material.map = this.bubbleTextures.chat;
+
+                other.bubbleSprite.visible = true;
+                other.bubbleSprite.material.map = this.bubbleTextures.sparkle;
+                break;
+              } else {
+                // Friendly wave in passing
+                c.rig.rightArmUpper.rotation.z = -1.6;
+                c.talkCooldown = 6.0;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Find nearest citizen within maxDist of player
+   */
+  getNearestCitizen(playerPos, maxDist = 3.5) {
+    let nearest = null;
+    let minDistSq = maxDist * maxDist;
+
+    for (let i = 0; i < this.allCitizens.length; i++) {
+      const c = this.allCitizens[i];
+      if (!c.mesh) continue;
+
+      const dx = c.mesh.position.x - playerPos.x;
+      const dz = c.mesh.position.z - playerPos.z;
+      const dSq = dx * dx + dz * dz;
+
+      if (dSq < minDistSq) {
+        minDistSq = dSq;
+        nearest = c;
+      }
+    }
+
+    return nearest ? { citizen: nearest, distance: Math.sqrt(minDistSq) } : null;
+  }
+
+  /**
+   * Start conversation with citizen
+   */
+  startPlayerConversation(citizen, playerPos) {
+    if (!citizen) return null;
+
+    this.activePlayerCitizen = citizen;
+    citizen.prevState = citizen.state;
+    citizen.state = 'PLAYER_TALKING';
+
+    // Face player
+    if (playerPos) {
+      const dx = playerPos.x - citizen.mesh.position.x;
+      const dz = playerPos.z - citizen.mesh.position.z;
+      citizen.mesh.rotation.y = Math.atan2(dx, dz);
+    }
+
+    // Friendly greeting wave
+    citizen.rig.rightArmUpper.rotation.z = -2.0;
+    citizen.bubbleSprite.visible = true;
+    citizen.bubbleSprite.material.map = this.bubbleTextures.wave;
+
+    const line = citizen.dialogueLines[citizen.dialogueIndex % citizen.dialogueLines.length];
+
+    return {
+      name: citizen.name,
+      title: citizen.title,
+      avatar: citizen.avatar,
+      text: line
+    };
+  }
+
+  /**
+   * Advance dialogue line
+   */
+  nextDialogue(citizen) {
+    if (!citizen) citizen = this.activePlayerCitizen;
+    if (!citizen) return null;
+
+    citizen.dialogueIndex = (citizen.dialogueIndex + 1) % citizen.dialogueLines.length;
+    const line = citizen.dialogueLines[citizen.dialogueIndex];
+
+    citizen.bubbleSprite.visible = true;
+    citizen.bubbleSprite.material.map = this.bubbleTextures.chat;
+
+    return {
+      name: citizen.name,
+      title: citizen.title,
+      avatar: citizen.avatar,
+      text: line
+    };
+  }
+
+  /**
+   * Citizen waves back at player
+   */
+  citizenWave(citizen) {
+    if (!citizen) citizen = this.activePlayerCitizen;
+    if (!citizen) return;
+
+    citizen.rig.rightArmUpper.rotation.z = -2.2;
+    citizen.rig.rightArmLower.rotation.y = 0.5;
+    citizen.bubbleSprite.visible = true;
+    citizen.bubbleSprite.material.map = this.bubbleTextures.wave;
+  }
+
+  /**
+   * End player conversation and return citizen to autonomous freedom
+   */
+  endPlayerConversation(citizen) {
+    if (!citizen) citizen = this.activePlayerCitizen;
+    if (!citizen) return;
+
+    citizen.bubbleSprite.visible = false;
+    citizen.state = citizen.prevState || 'WALKING';
+    citizen.talkCooldown = 10.0;
+    citizen.decisionCooldown = 8.0;
+
+    if (this.activePlayerCitizen === citizen) {
+      this.activePlayerCitizen = null;
+    }
+  }
+
+  clear() {
+    while (this.group.children.length > 0) {
+      this.group.remove(this.group.children[0]);
+    }
+    this.allCitizens = [];
+    this.activePlayerCitizen = null;
+    this.benches.forEach(b => b.occupant = null);
+  }
+}
