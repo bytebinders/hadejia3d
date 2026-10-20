@@ -65,6 +65,7 @@ export class AuthManager {
       email: cleanEmail,
       password: password,
       options: {
+        emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
         data: {
           username: cleanUsername,
           display_name: cleanUsername
