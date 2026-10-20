@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LowPolyHuman } from './lowPolyHuman.js';
+import { LowPolyHuman, getCharacterPreset } from './lowPolyHuman.js';
 
 /**
  * PedestrianSystem — Fully Autonomous Metropolis Citizens with Free Will
@@ -251,19 +251,17 @@ export class PedestrianSystem {
   spawnPedestrians(count = 35) {
     this.clear();
 
-    for (let i = 0; i < count; i++) {
-      const isMen = (i % 2 === 0);
-      const genderId = isMen ? 'harpy' : 'xixi';
-      const gender = isMen ? 'men' : 'women';
+    const castKeys = ['harpy', 'xixi', 'malam_bello', 'dogari_danladi', 'amina_merchant', 'ibrahim_keke'];
 
-      const palette = LowPolyHuman.getRandomPalette(gender);
+    for (let i = 0; i < count; i++) {
+      const castId = castKeys[i % castKeys.length];
+      const preset = getCharacterPreset(castId);
+      const isMen = (preset.gender === 'men');
+      const gender = preset.gender;
+
       const rig = LowPolyHuman.create({
-        gender,
-        avatarId: genderId,
-        palette,
-        scale: 0.65,
-        style: isMen ? LowPolyHuman.getRandomMenStyle() : LowPolyHuman.getRandomWomenStyle(),
-        hairstyle: isMen ? LowPolyHuman.getRandomMenHairstyle() : LowPolyHuman.getRandomWomenHairstyle()
+        id: castId,
+        avatarId: castId
       });
       const mesh = rig.root;
 
@@ -278,16 +276,25 @@ export class PedestrianSystem {
       mesh.position.set(startNode.pos.x, groundY, startNode.pos.z);
 
       const name = CITIZEN_NAMES[i % CITIZEN_NAMES.length];
-      const title = CITIZEN_TITLES[i % CITIZEN_TITLES.length];
+      const title = preset.role || CITIZEN_TITLES[i % CITIZEN_TITLES.length];
       const avatar = isMen ? '👨' : '👩';
       const dialogueLines = this._generateDialogue(startNode.district);
 
       const bubbleSprite = this._attachSpeechBubble(mesh);
 
+      const baseGait = preset.gait || { stride: 1.0, armSwing: 1.0, posture: 0.04, bounce: 0.9, hipSway: 0.04 };
+      const gait = {
+        stride: (baseGait.stride || 1.0) * (0.92 + Math.random() * 0.16),
+        armSwing: (baseGait.armSwing || 1.0) * (0.9 + Math.random() * 0.2),
+        posture: (baseGait.posture || 0.04) + (-0.02 + Math.random() * 0.04),
+        bounce: (baseGait.bounce || 0.9) * (0.9 + Math.random() * 0.2),
+        hipSway: (baseGait.hipSway || 0.04) * (0.9 + Math.random() * 0.2)
+      };
+
       const citizen = {
         id: `citizen_${i}`,
         gender: isMen ? 'men' : 'women',
-        avatarId: genderId,
+        avatarId: castId,
         fbxInstance: null,
         rig,
         mesh,
@@ -309,13 +316,7 @@ export class PedestrianSystem {
         avoid: new THREE.Vector2(),
 
         // Individual body language so no two people move identically
-        gait: {
-          stride: 0.85 + Math.random() * 0.3,
-          armSwing: 0.75 + Math.random() * 0.5,
-          posture: -0.03 + Math.random() * 0.09,
-          bounce: 0.8 + Math.random() * 0.4,
-          hipSway: isMen ? 0.03 : 0.06
-        },
+        gait,
         breathPhase: Math.random() * Math.PI * 2,
         lookYaw: 0,
         waveTimer: 0,

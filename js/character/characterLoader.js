@@ -18,18 +18,56 @@ export class CharacterLoader {
       'harpy': {
         id: 'harpy',
         gender: 'men',
-        name: 'Harpy (Men)',
-        subtitle: 'Athletic Male Stickman with Realistic Clothes',
-        defaultOutfit: 'harpy_urban',
+        name: 'Harpy',
+        role: 'Urban Explorer',
+        subtitle: 'Energetic Modern Youth with Urban Bomber & Hula Cap',
+        defaultOutfit: 'urban_bomber',
         defaultHairstyle: 'hula_zanna'
       },
       'xixi': {
         id: 'xixi',
         gender: 'women',
-        name: 'Xixi (Women)',
-        subtitle: 'Graceful Female Stickman with Realistic Clothes',
-        defaultOutfit: 'xixi_urban',
-        defaultHairstyle: 'hijab_mayafi'
+        name: 'Xixi',
+        role: 'Cultural Ambassador',
+        subtitle: 'Poised Leader with Wax-Print Atampa & Mayafi Veil',
+        defaultOutfit: 'hausa_atampa',
+        defaultHairstyle: 'mayafi_veil'
+      },
+      'malam_bello': {
+        id: 'malam_bello',
+        gender: 'men',
+        name: 'Malam Bello',
+        role: 'Heritage Scholar',
+        subtitle: 'Emirate Elder in Floor-Length Babban Riga & Zanna Cap',
+        defaultOutfit: 'royal_babban_riga',
+        defaultHairstyle: 'zanna_bukar_royal'
+      },
+      'dogari_danladi': {
+        id: 'dogari_danladi',
+        gender: 'men',
+        name: 'Dogari Danladi',
+        role: 'Royal Palace Guard',
+        subtitle: 'Palace Sentinel in Crimson & Green Uniform with Rawani Turban',
+        defaultOutfit: 'palace_dogari',
+        defaultHairstyle: 'rawani_turban'
+      },
+      'amina_merchant': {
+        id: 'amina_merchant',
+        gender: 'women',
+        name: 'Amina Mai-Kifi',
+        role: 'Wetlands Trade Host',
+        subtitle: 'Marina Boardwalk Merchant in Indigo Atampa & Gold Bangles',
+        defaultOutfit: 'hausa_atampa',
+        defaultHairstyle: 'mayafi_veil'
+      },
+      'ibrahim_keke': {
+        id: 'ibrahim_keke',
+        gender: 'men',
+        name: 'Ibrahim Sambo',
+        role: 'City Navigator',
+        subtitle: 'Keke Tricycle Captain in Ochre Kaftan & Clean Fade',
+        defaultOutfit: 'kaftan_classic',
+        defaultHairstyle: 'urban_fade'
       }
     };
   }
@@ -39,21 +77,27 @@ export class CharacterLoader {
    */
   async preloadAll() {
     this.isPreloaded = true;
-    console.log('[CharacterLoader] Universal Stickman & 3D Realistic Wardrobe engine ready.');
+    console.log('[CharacterLoader] Cast-First Character & Wardrobe engine ready.');
     return Promise.resolve(true);
   }
 
   /**
-   * Resolve canonical character ID ('men' -> 'harpy', 'women' -> 'xixi')
+   * Resolve canonical character ID
    */
   resolveId(id = 'harpy') {
     const clean = (id || '').toLowerCase();
+    if (this.characters[clean]) return clean;
     if (clean === 'women' || clean === 'female' || clean === 'xixi') return 'xixi';
+    if (clean === 'bello' || clean === 'malam' || clean === 'scholar') return 'malam_bello';
+    if (clean === 'guard' || clean === 'dogari' || clean === 'danladi') return 'dogari_danladi';
+    if (clean === 'merchant' || clean === 'trader' || clean === 'amina') return 'amina_merchant';
+    if (clean === 'keke' || clean === 'driver' || clean === 'ibrahim') return 'ibrahim_keke';
     return 'harpy';
   }
 
   resolveGender(id = 'harpy') {
-    return this.resolveId(id) === 'xixi' ? 'women' : 'men';
+    const cleanId = this.resolveId(id);
+    return this.characters[cleanId]?.gender || 'men';
   }
 
   /**

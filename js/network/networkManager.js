@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LowPolyHuman } from '../character/lowPolyHuman.js';
+import { LowPolyHuman, getCharacterPreset } from '../character/lowPolyHuman.js';
 import { VoiceChatManager } from '../audio/voiceChatManager.js';
 
 /**
@@ -272,18 +272,15 @@ export class NetworkManager {
     if (playerData.id === this.localPlayerId) return;
     if (this.remotePlayers.has(playerData.id)) return;
 
-    const isWomen = (playerData.avatar === 'women' || playerData.avatar === 'female' || playerData.avatar === 'xixi');
-    const avatarId = isWomen ? 'xixi' : 'harpy';
-    const gender = isWomen ? 'women' : 'men';
+    const preset = getCharacterPreset(playerData.avatar || 'harpy');
+    const avatarId = preset.id;
+    const gender = preset.gender;
 
-    const palette = playerData.palette || LowPolyHuman.getRandomPalette(gender);
     const rig = LowPolyHuman.create({
-      gender,
+      id: avatarId,
       avatarId,
-      palette,
-      scale: 0.65,
-      style: isWomen ? 'xixi_urban' : 'harpy_urban',
-      hairstyle: isWomen ? 'hijab_mayafi' : 'hula_zanna'
+      palette: playerData.palette,
+      scale: preset.proportions?.scale || 0.65
     });
 
     const mesh = rig.root;
@@ -335,17 +332,15 @@ export class NetworkManager {
    */
   _switchRemotePlayerAvatar(rp, newAvatarId) {
     if (!newAvatarId) return;
-    const isWomen = (newAvatarId === 'women' || newAvatarId === 'female' || newAvatarId === 'xixi');
-    const cleanId = isWomen ? 'xixi' : 'harpy';
+    const preset = getCharacterPreset(newAvatarId);
+    const cleanId = preset.id;
     if (rp.avatarId === cleanId) return;
     rp.avatarId = cleanId;
 
     const newRig = LowPolyHuman.create({
-      gender: isWomen ? 'women' : 'men',
+      id: cleanId,
       avatarId: cleanId,
-      scale: 0.65,
-      style: isWomen ? 'xixi_urban' : 'harpy_urban',
-      hairstyle: isWomen ? 'hijab_mayafi' : 'hula_zanna'
+      scale: preset.proportions?.scale || 0.65
     });
 
     if (newRig && newRig.hips) {

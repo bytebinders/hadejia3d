@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LowPolyHuman } from './lowPolyHuman.js';
+import { LowPolyHuman, getCharacterPreset } from './lowPolyHuman.js';
 
 /**
  * PlayerController — Full Character Controller & Vehicle Driving System
@@ -18,23 +18,22 @@ export class PlayerController {
     this.soundSys = soundSys;
     this.charLoader = charLoader;
 
-    // Character avatar selection: 'harpy' (Men) or 'xixi' (Women)
+    // Character avatar selection (Harpy, Xixi, Malam Bello, Dogari Danladi, Amina Mai-Kifi, Ibrahim Sambo)
     this.activeAvatar = 'harpy';
     this.onAvatarChange = null;
 
     const savedAvatar = typeof localStorage !== 'undefined' ? localStorage.getItem('hadejia3d_avatar') : null;
     if (savedAvatar) {
-      this.activeAvatar = (savedAvatar === 'women' || savedAvatar === 'female' || savedAvatar === 'xixi') ? 'xixi' : 'harpy';
+      this.activeAvatar = getCharacterPreset(savedAvatar).id;
     }
 
-    // Build base player stickman model with realistic 3D clothes
-    const isInitWomen = (this.activeAvatar === 'xixi');
+    // Build base player model with cast preset
+    const basePreset = getCharacterPreset(this.activeAvatar);
     this.rig = LowPolyHuman.create({
       isPlayer: true,
-      scale: 0.65,
-      gender: isInitWomen ? 'women' : 'men',
+      id: this.activeAvatar,
       avatarId: this.activeAvatar,
-      style: isInitWomen ? 'xixi_urban' : 'harpy_urban'
+      scale: basePreset.proportions?.scale || 0.65
     });
     this.mesh = this.rig.root;
     this.groundY = this.collisionSys ? this.collisionSys.getGroundHeight(-15, 25) : 1.87;
@@ -828,25 +827,23 @@ export class PlayerController {
   }
 
   /**
-   * Switch between Harpy (Men) and Xixi (Women) stickman rigs with modular 3D clothes
+   * Switch between Cast Character presets (Harpy, Xixi, Malam Bello, Dogari Danladi, Amina Mai-Kifi, Ibrahim Sambo)
    */
   setAvatar(avatarId) {
     if (!avatarId) return;
-    const cleanId = (avatarId === 'women' || avatarId === 'female' || avatarId === 'xixi') ? 'xixi' : 'harpy';
+    const preset = getCharacterPreset(avatarId);
+    const cleanId = preset.id;
     this.activeAvatar = cleanId;
 
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('hadejia3d_avatar', cleanId);
     }
 
-    const isWomen = (cleanId === 'xixi');
     const newRig = LowPolyHuman.create({
       isPlayer: true,
-      scale: 0.65,
-      gender: isWomen ? 'women' : 'men',
+      id: cleanId,
       avatarId: cleanId,
-      style: isWomen ? 'xixi_urban' : 'harpy_urban',
-      hairstyle: isWomen ? 'hijab_mayafi' : 'hula_zanna'
+      scale: preset.proportions?.scale || 0.65
     });
 
     if (newRig && newRig.hips) {
@@ -877,10 +874,14 @@ export class PlayerController {
 
     switch (this.state) {
       case 'WALK': {
+        const gait = r.preset?.gait || { stride: 1.0, armSwing: 1.0, posture: 0.04, bounce: 1.0, hipSway: 0.04 };
         const freq = 7.5;
         const phase = t * freq;
-        const stride = 0.65;
-        const armSwing = 0.52;
+        const stride = 0.65 * (gait.stride || 1.0);
+        const armSwing = 0.52 * (gait.armSwing || 1.0);
+        const bounce = 0.06 * (gait.bounce || 1.0);
+        const hipSway = (gait.hipSway || 0.04);
+        const posture = (gait.posture || 0.04);
 
         r.leftLegUpper.rotation.x = Math.sin(phase) * stride;
         r.leftLegLower.rotation.x = Math.max(0, -Math.sin(phase) * stride * 0.9);
@@ -897,11 +898,11 @@ export class PlayerController {
         r.rightArmUpper.rotation.z = -0.06;
         r.rightArmLower.rotation.x = -(0.18 + Math.max(0, Math.sin(phase) * 0.38));
 
-        // Natural pelvic list, subtle hip twist and spinal counter-rotation
-        r.hips.position.y = 1.35 + Math.abs(Math.sin(phase * 2)) * 0.06;
-        r.hips.rotation.y = Math.sin(phase) * 0.04;
+        // Natural pelvic list, subtle hip twist and spinal counter-rotation tailored to gait
+        r.hips.position.y = 1.35 + Math.abs(Math.sin(phase * 2)) * bounce;
+        r.hips.rotation.y = Math.sin(phase) * hipSway;
         r.torso.rotation.y = -Math.sin(phase) * 0.08;
-        r.torso.rotation.x = 0.06;
+        r.torso.rotation.x = posture;
 
         // Head gaze stabilization forward
         r.headPivot.rotation.y = -r.torso.rotation.y * 0.85;
