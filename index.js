@@ -27,8 +27,9 @@ const MIME_TYPES = {
 
 // Vercel Serverless Function & Local HTTP Handler
 export default function handler(req, res) {
-  let reqPath = decodeURI((req.url || '/').split('?')[0]);
-  if (reqPath === '/' || reqPath === '') {
+  let rawUrl = req.headers['x-matched-path'] || req.url || '/';
+  let reqPath = decodeURI(rawUrl.split('?')[0]);
+  if (reqPath === '/' || reqPath === '' || reqPath === '/index.js') {
     reqPath = '/index.html';
   }
 
@@ -50,19 +51,22 @@ export default function handler(req, res) {
   });
 
   if (!filePath) {
-    // SPA Fallback: serve index.html
-    const indexCandidates = [
-      path.join(__dirname, 'index.html'),
-      path.join(process.cwd(), 'index.html'),
-      path.resolve('index.html')
-    ];
-    filePath = indexCandidates.find(p => {
-      try {
-        return fs.existsSync(p) && fs.statSync(p).isFile();
-      } catch {
-        return false;
-      }
-    });
+    const ext = path.extname(safePath).toLowerCase();
+    // Only fallback to index.html for page/HTML routes, NEVER for css, js, images!
+    if (!ext || ext === '.html') {
+      const indexCandidates = [
+        path.join(__dirname, 'index.html'),
+        path.join(process.cwd(), 'index.html'),
+        path.resolve('index.html')
+      ];
+      filePath = indexCandidates.find(p => {
+        try {
+          return fs.existsSync(p) && fs.statSync(p).isFile();
+        } catch {
+          return false;
+        }
+      });
+    }
   }
 
   if (filePath && fs.existsSync(filePath)) {
