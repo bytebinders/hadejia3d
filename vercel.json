@@ -1,6 +1,17 @@
 {
   "version": 2,
   "cleanUrls": true,
+  "functions": {
+    "index.js": {
+      "includeFiles": "**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.js"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
