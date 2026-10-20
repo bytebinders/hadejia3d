@@ -16,6 +16,7 @@ import { CityMap } from './ui/cityMap.js';
 import { VirtualJoystick } from './ui/virtualJoystick.js';
 import { AuthManager } from './auth/authManager.js';
 import { CharacterLoader } from './character/characterLoader.js';
+import { CastStudio } from './ui/castStudio.js';
 
 /**
  * Polis3D — Interactive Low-Poly 3D Metropolis Simulation
@@ -160,6 +161,9 @@ class MetropolisApp {
 
     // 16. Mobile Touch Virtual Joystick & Dual-Stick Camera
     this.virtualJoystick = new VirtualJoystick(this);
+
+    // 17. 3D Character Cast Studio & Design Sheet Inspector
+    this.castStudio = new CastStudio(this);
 
     // Default camera view to Player Mode always
     this.setCameraPreset('player');

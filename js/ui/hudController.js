@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getCharacterPreset } from '../character/characterPresets.js';
 
 /**
  * HUDController — Connects Glassmorphism HUD, Controls Drawer,
@@ -180,6 +181,8 @@ export class HUDController {
     this.btnDropdownXixi = document.getElementById('btn-dropdown-avatar-xixi');
     this.btnMobileHarpy = document.getElementById('btn-m-avatar-harpy');
     this.btnMobileXixi = document.getElementById('btn-m-avatar-xixi');
+    this.btnToggleCast = document.getElementById('btn-toggle-cast');
+    this.btnQuickOpenCast = document.getElementById('btn-quick-open-cast');
   }
 
   _initHighlightBox() {
@@ -495,6 +498,14 @@ export class HUDController {
     bindAvatar(this.btnMobileHarpy, 'harpy');
     bindAvatar(this.btnMobileXixi, 'xixi');
 
+    const openCastStudio = () => {
+      if (this.app.castStudio) this.app.castStudio.toggle();
+      if (this.app.soundSys) this.app.soundSys.playClick();
+    };
+
+    if (this.btnToggleCast) this.btnToggleCast.addEventListener('click', openCastStudio);
+    if (this.btnQuickOpenCast) this.btnQuickOpenCast.addEventListener('click', openCastStudio);
+
     if (this.app.playerCtrl) {
       this.app.playerCtrl.onAvatarChange = (avatarId) => {
         this._updateAvatarUI(avatarId);
@@ -504,40 +515,51 @@ export class HUDController {
   }
 
   setAvatar(avatarId) {
-    const isWomen = (avatarId === 'xixi' || avatarId === 'women' || avatarId === 'female');
-    const cleanId = isWomen ? 'xixi' : 'harpy';
+    const preset = getCharacterPreset(avatarId);
+    const cleanId = preset.id;
 
     if (this.app.playerCtrl) {
       this.app.playerCtrl.setAvatar(cleanId);
     }
 
     this._updateAvatarUI(cleanId);
-    this.showToast(isWomen ? '👩 Switched Avatar to Xixi (Women)' : '👨 Switched Avatar to Harpy (Men)');
+    this.showToast(`Switched Character to ${preset.name} (${preset.role})`);
   }
 
   _updateAvatarUI(cleanId) {
-    const isWomen = (cleanId === 'xixi');
+    const preset = getCharacterPreset(cleanId);
+    const isWomen = (preset.gender === 'women');
 
-    if (this.btnQuickHarpy) this.btnQuickHarpy.classList.toggle('active', !isWomen);
-    if (this.btnQuickXixi) this.btnQuickXixi.classList.toggle('active', isWomen);
+    if (this.btnQuickHarpy) this.btnQuickHarpy.classList.toggle('active', cleanId === 'harpy');
+    if (this.btnQuickXixi) this.btnQuickXixi.classList.toggle('active', cleanId === 'xixi');
 
-    if (this.btnDrawerHarpy) this.btnDrawerHarpy.classList.toggle('active', !isWomen);
-    if (this.btnDrawerXixi) this.btnDrawerXixi.classList.toggle('active', isWomen);
+    if (this.btnDrawerHarpy) this.btnDrawerHarpy.classList.toggle('active', cleanId === 'harpy');
+    if (this.btnDrawerXixi) this.btnDrawerXixi.classList.toggle('active', cleanId === 'xixi');
 
-    if (this.btnDropdownHarpy) this.btnDropdownHarpy.classList.toggle('active', !isWomen);
-    if (this.btnDropdownXixi) this.btnDropdownXixi.classList.toggle('active', isWomen);
+    if (this.btnDropdownHarpy) this.btnDropdownHarpy.classList.toggle('active', cleanId === 'harpy');
+    if (this.btnDropdownXixi) this.btnDropdownXixi.classList.toggle('active', cleanId === 'xixi');
 
-    if (this.btnMobileHarpy) this.btnMobileHarpy.classList.toggle('active', !isWomen);
-    if (this.btnMobileXixi) this.btnMobileXixi.classList.toggle('active', isWomen);
+    if (this.btnMobileHarpy) this.btnMobileHarpy.classList.toggle('active', cleanId === 'harpy');
+    if (this.btnMobileXixi) this.btnMobileXixi.classList.toggle('active', cleanId === 'xixi');
+
+    const icons = {
+      harpy: '🧢',
+      xixi: '🌺',
+      malam_bello: '📜',
+      dogari_danladi: '🛡️',
+      amina_merchant: '🐟',
+      ibrahim_keke: '🛺'
+    };
+    const icon = icons[cleanId] || (isWomen ? '👩' : '👨');
 
     const hudAvatar = document.getElementById('player-hud-avatar-icon');
-    if (hudAvatar) hudAvatar.textContent = isWomen ? '👩' : '👨';
+    if (hudAvatar) hudAvatar.textContent = icon;
 
     const hudName = document.getElementById('player-hud-name');
-    if (hudName) hudName.textContent = isWomen ? 'XIXI (WOMEN)' : 'HARPY (MEN)';
+    if (hudName) hudName.textContent = `${preset.name.toUpperCase()} (${preset.role.toUpperCase()})`;
 
     const dropdownBadge = document.getElementById('dropdown-avatar-badge');
-    if (dropdownBadge) dropdownBadge.textContent = isWomen ? '👩' : '👨';
+    if (dropdownBadge) dropdownBadge.textContent = icon;
   }
 
   _bindMultiplayerEvents() {

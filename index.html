@@ -139,6 +139,12 @@
         <span id="voice-btn-label" class="voice-btn-label">Mic Off</span>
         <kbd class="map-kbd">V</kbd>
       </button>
+      <button id="btn-toggle-cast" class="icon-btn highlight-cast" title="Character Cast Studio & Design Sheets (P)"
+        aria-label="Character Cast Studio">
+        <span class="cast-btn-icon">🎭</span>
+        <span class="cast-btn-label">Cast</span>
+        <kbd class="map-kbd">P</kbd>
+      </button>
       <button id="btn-toggle-map" class="icon-btn highlight-map" title="Toggle Interactive City Map (M)"
         aria-label="Toggle City Map">
         <span class="map-btn-icon">🗺️</span>
@@ -375,8 +381,9 @@
         </div>
       </div>
       <div class="player-avatar-quick-pills">
-        <button id="btn-quick-avatar-harpy" class="quick-avatar-pill active" title="Switch to Harpy (Men)">👨 Men</button>
-        <button id="btn-quick-avatar-xixi" class="quick-avatar-pill" title="Switch to Xixi (Women)">👩 Women</button>
+        <button id="btn-quick-avatar-harpy" class="quick-avatar-pill active" title="Switch to Harpy">🧢 Harpy</button>
+        <button id="btn-quick-avatar-xixi" class="quick-avatar-pill" title="Switch to Xixi">🌺 Xixi</button>
+        <button id="btn-quick-open-cast" class="quick-avatar-pill highlight-pill" title="Open Character Cast Studio (P)">🎭 Cast Studio</button>
       </div>
     </div>
     <div class="player-actions">
@@ -592,6 +599,89 @@
       <button class="district-jump-btn" data-x="-60" data-z="25">🧺 Babban Kasuwa & Kifi</button>
       <button class="district-jump-btn" data-x="-85" data-z="0">🚪 Kofar Yamma Gate</button>
       <button class="district-jump-btn" data-x="88" data-z="0">🦅 Hadejia Wetlands</button>
+    </div>
+  </div>
+
+  <!-- Character Cast Studio & 3D Design Sheet Modal -->
+  <div id="cast-studio-modal" class="cast-studio-modal glass-panel hidden">
+    <div class="cast-studio-header">
+      <div class="cast-header-title">
+        <span class="cast-header-icon">🎭</span>
+        <div>
+          <h3>HADEJIA CAST STUDIO</h3>
+          <span class="cast-header-sub">Skeletal Rig Presets • Visual Design Sheets • 3D Turntable Preview • Press <kbd>P</kbd> or <kbd>Esc</kbd></span>
+        </div>
+      </div>
+      <div class="cast-header-actions">
+        <button id="btn-cast-autorotate" class="cast-ctrl-btn active" title="Toggle Turntable Rotation">🔄 Turntable</button>
+        <button id="btn-close-cast-studio" class="btn-close-modal" title="Close Cast Studio">✕</button>
+      </div>
+    </div>
+
+    <div class="cast-studio-content">
+      <!-- Left Column: Cast Selection Cards -->
+      <div class="cast-col-roster">
+        <div class="cast-col-header">CHARACTER ROSTER</div>
+        <div class="cast-cards-list" id="cast-cards-list">
+          <!-- Populated dynamically via CastStudio -->
+        </div>
+      </div>
+
+      <!-- Center Column: 3D Turntable Viewport -->
+      <div class="cast-col-viewport">
+        <div class="cast-canvas-wrap">
+          <canvas id="cast-studio-canvas"></canvas>
+          <div class="cast-viewport-hint">Click & Drag to Orbit Turntable</div>
+        </div>
+        <div class="cast-anim-bar">
+          <span class="anim-bar-label">ANIMATION:</span>
+          <button class="cast-anim-pill active" data-anim="NEUTRAL">🧍 Idle</button>
+          <button class="cast-anim-pill" data-anim="WALK">🚶 Walk</button>
+          <button class="cast-anim-pill" data-anim="RUN">🏃 Run</button>
+          <button class="cast-anim-pill" data-anim="SIT">🪑 Sit</button>
+          <button class="cast-anim-pill" data-anim="DANCE">🕺 Dance</button>
+        </div>
+      </div>
+
+      <!-- Right Column: Visual Design Sheet -->
+      <div class="cast-col-sheet">
+        <div class="cast-col-header">DESIGN SHEET</div>
+        <div class="cast-sheet-scroll">
+          <div class="sheet-section">
+            <h4 id="cast-sheet-name">Harpy</h4>
+            <span class="sheet-role-badge" id="cast-sheet-role">Urban Explorer • Men</span>
+            <p class="sheet-bio" id="cast-sheet-bio">Energetic, tech-forward youth navigating the smart city avenues and central parkways.</p>
+          </div>
+
+          <div class="sheet-section">
+            <label class="sheet-label">PALETTE SWATCHES</label>
+            <div class="palette-swatches-grid" id="cast-sheet-palette"></div>
+          </div>
+
+          <div class="sheet-section">
+            <label class="sheet-label">ANATOMICAL PROPORTIONS</label>
+            <div class="proportions-grid" id="cast-sheet-proportions"></div>
+          </div>
+
+          <div class="sheet-section">
+            <label class="sheet-label">MODULAR WARDROBE & RIG MODULES</label>
+            <div class="modules-specs">
+              <div class="mod-spec"><span>Outfit:</span><strong id="cast-sheet-outfit">URBAN BOMBER</strong></div>
+              <div class="mod-spec"><span>Headwear:</span><strong id="cast-sheet-headwear">HULA ZANNA</strong></div>
+              <div class="mod-spec"><span>Accessories:</span><strong id="cast-sheet-accessories">SMARTWATCH, LEATHER BELT</strong></div>
+            </div>
+          </div>
+
+          <div class="sheet-section">
+            <label class="sheet-label">BIOMECHANICAL GAIT PERSONALITY</label>
+            <div class="gait-stats-grid" id="cast-sheet-gait"></div>
+          </div>
+
+          <button id="btn-cast-play-active" class="btn-cast-select-hero">
+            <span>🎮</span> Select as Active Character
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
