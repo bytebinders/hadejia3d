@@ -480,6 +480,37 @@ export class HUDController {
         this.showToast('A player disconnected from Wi-Fi grid', '👋');
       };
 
+      this.app.networkMgr.onStatusChange = (status) => {
+        if (this.metricPlayers) {
+          if (status === 'SOLO') {
+            this.metricPlayers.textContent = 'Solo Explorer';
+            this.metricPlayers.classList.remove('highlight-green');
+          } else if (status === 'ONLINE') {
+            this.metricPlayers.classList.add('highlight-green');
+          } else if (status === 'DISCONNECTED') {
+            this.metricPlayers.textContent = 'Offline';
+            this.metricPlayers.classList.remove('highlight-green');
+          }
+        }
+        const mpPill = document.getElementById('mp-status-pill');
+        if (mpPill) {
+          if (status === 'SOLO') {
+            mpPill.textContent = '○ SOLO MODE';
+            mpPill.className = 'badge badge-solo';
+          } else if (status === 'ONLINE') {
+            mpPill.textContent = '● ACTIVE';
+            mpPill.className = 'badge badge-online';
+          } else if (status === 'DISCONNECTED') {
+            mpPill.textContent = '✕ OFFLINE';
+            mpPill.className = 'badge badge-offline';
+          }
+        }
+      };
+
+      if (this.app.networkMgr.status) {
+        this.app.networkMgr.onStatusChange(this.app.networkMgr.status);
+      }
+
       // Real-time Spatial Proximity Voice Chat callbacks
       if (this.app.networkMgr.voiceChat) {
         const vc = this.app.networkMgr.voiceChat;

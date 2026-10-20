@@ -52,23 +52,45 @@ export class NetworkManager {
     this.onPlayerJoined = null;
     this.onPlayerLeft = null;
     this.onChatMessage = null;
+    this.onStatusChange = null;
+    this.status = 'INITIALIZING';
+    this.reconnectAttempts = 0;
 
     this.connect();
   }
 
   /**
-   * Establish WebSocket connection to local Wi-Fi server
+   * Establish WebSocket connection to local Wi-Fi server or custom relay
    */
-  connect() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+  connect(customUrl = null) {
+    if (this.ws) {
+      try { this.ws.close(); } catch (e) {}
+      this.ws = null;
+    }
+
+    const isVercel = window.location.hostname.endsWith('vercel.app');
+    const savedUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('hadejia3d_ws_url') : null;
+
+    let wsUrl = customUrl || savedUrl;
+
+    if (!wsUrl) {
+      if (isVercel) {
+        console.log('[Multiplayer] Running on Vercel static hosting. Standalone Explorer mode active.');
+        this._notifyStatus('SOLO');
+        return;
+      }
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${protocol}//${window.location.host}`;
+    }
 
     try {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
         this.isConnected = true;
+        this.reconnectAttempts = 0;
         console.log(`[Multiplayer] Connected to server at ${wsUrl}`);
+        this._notifyStatus('ONLINE');
       };
 
       this.ws.onmessage = (event) => {
@@ -77,16 +99,28 @@ export class NetworkManager {
 
       this.ws.onclose = () => {
         this.isConnected = false;
-        console.log('[Multiplayer] Disconnected from server. Reconnecting in 3s...');
-        // Auto-reconnect
-        setTimeout(() => this.connect(), 3000);
+        this._notifyStatus('DISCONNECTED');
+        if (!this.reconnectAttempts) this.reconnectAttempts = 0;
+        if (this.reconnectAttempts < 3 && !isVercel) {
+          this.reconnectAttempts++;
+          const delay = this.reconnectAttempts * 2500;
+          setTimeout(() => this.connect(wsUrl), delay);
+        }
       };
 
-      this.ws.onerror = (err) => {
-        console.warn('[Multiplayer] WebSocket connection error:', err);
+      this.ws.onerror = () => {
+        // Suppress noisy console errors if server is unreachable
       };
     } catch (e) {
       console.warn('[Multiplayer] WebSocket setup error:', e);
+      this._notifyStatus('DISCONNECTED');
+    }
+  }
+
+  _notifyStatus(status) {
+    this.status = status;
+    if (this.onStatusChange) {
+      this.onStatusChange(status);
     }
   }
 

@@ -2206,6 +2206,24 @@ input:checked + .slider.round:before {
   justify-content: flex-end;
 }
 
+.badge-online {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.badge-solo {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.badge-offline {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
 /* ==========================================================================
    Responsive Adaptations
    ========================================================================== */
