@@ -46,9 +46,10 @@ const CITIZEN_TITLES = [
 const CITIZEN_AVATARS = ['👑', '🕌', '🐟', '🌴', '🛺', '🌾', '🧕', '👳', '🍵', '🪡', '📜', '🦅'];
 
 export class PedestrianSystem {
-  constructor(scene, collisionSys = null) {
+  constructor(scene, collisionSys = null, charLoader = null) {
     this.scene = scene;
     this.collisionSys = collisionSys;
+    this.charLoader = charLoader;
     this.group = new THREE.Group();
     this.group.name = 'PedestrianSystem';
     this.scene.add(this.group);
@@ -241,8 +242,19 @@ export class PedestrianSystem {
     this.clear();
 
     for (let i = 0; i < count; i++) {
-      const palette = LowPolyHuman.getRandomPalette();
-      const rig = LowPolyHuman.create({ palette });
+      const isMen = (i % 2 === 0);
+      const genderId = isMen ? 'harpy' : 'xixi';
+      const gender = isMen ? 'men' : 'women';
+
+      const palette = LowPolyHuman.getRandomPalette(gender);
+      const rig = LowPolyHuman.create({
+        gender,
+        avatarId: genderId,
+        palette,
+        scale: 0.65,
+        style: isMen ? LowPolyHuman.getRandomMenStyle() : LowPolyHuman.getRandomWomenStyle(),
+        hairstyle: isMen ? LowPolyHuman.getRandomMenHairstyle() : LowPolyHuman.getRandomWomenHairstyle()
+      });
       const mesh = rig.root;
 
       // Pick random initial node on the city graph
@@ -257,13 +269,16 @@ export class PedestrianSystem {
 
       const name = CITIZEN_NAMES[i % CITIZEN_NAMES.length];
       const title = CITIZEN_TITLES[i % CITIZEN_TITLES.length];
-      const avatar = CITIZEN_AVATARS[i % CITIZEN_AVATARS.length];
+      const avatar = isMen ? '👨' : '👩';
       const dialogueLines = this._generateDialogue(startNode.district);
 
       const bubbleSprite = this._attachSpeechBubble(mesh);
 
       const citizen = {
         id: `citizen_${i}`,
+        gender: isMen ? 'men' : 'women',
+        avatarId: genderId,
+        fbxInstance,
         rig,
         mesh,
         name,
@@ -314,6 +329,7 @@ export class PedestrianSystem {
   }
 
   _applySittingPose(rig) {
+    if (!rig) return;
     rig.hips.position.y = 0.72;
     rig.hips.position.z = -0.2;
     rig.leftLegUpper.rotation.x = -Math.PI / 2 + 0.1;
@@ -327,6 +343,7 @@ export class PedestrianSystem {
   }
 
   _resetToStandingPose(rig) {
+    if (!rig) return;
     rig.hips.position.set(0, 1.35, 0);
     rig.hips.rotation.set(0, 0, 0);
     rig.torso.rotation.set(0, 0, 0);
@@ -358,9 +375,13 @@ export class PedestrianSystem {
       // ==========================================
       if (c.state === 'PLAYER_TALKING') {
         const t = nowTime * 4.0;
-        c.rig.rightArmUpper.rotation.x = -0.4 + Math.sin(t) * 0.2;
-        c.rig.rightArmLower.rotation.x = 0.6;
-        c.rig.headPivot.rotation.x = 0.06;
+        if (c.rig) {
+          c.rig.rightArmUpper.rotation.x = -0.4 + Math.sin(t) * 0.2;
+          c.rig.rightArmLower.rotation.x = 0.6;
+          c.rig.headPivot.rotation.x = 0.06;
+        } else if (c.fbxInstance && this.charLoader) {
+          this.charLoader.animateInstance(c.fbxInstance, 'IDLE', c.animPhase, delta);
+        }
         c.bubbleSprite.visible = true;
         c.bubbleSprite.material.map = this.bubbleTextures.chat;
         continue;
@@ -372,7 +393,11 @@ export class PedestrianSystem {
       if (c.state === 'SITTING') {
         // Occasionally glance around or check phone while seated
         const t = nowTime * 1.5;
-        c.rig.headPivot.rotation.y = Math.sin(t) * 0.25;
+        if (c.rig) {
+          c.rig.headPivot.rotation.y = Math.sin(t) * 0.25;
+        } else if (c.fbxInstance && this.charLoader) {
+          this.charLoader.animateInstance(c.fbxInstance, 'IDLE', c.animPhase, delta);
+        }
 
         // When well rested, stand up and choose where to explore next!
         if (c.stateTimer <= 0) {
@@ -424,13 +449,17 @@ export class PedestrianSystem {
         } else {
           // Play energetic dance animation
           const t = nowTime * 6.5;
-          c.rig.hips.position.x = Math.sin(t) * 0.14;
-          c.rig.hips.rotation.y = Math.sin(t) * 0.32;
-          c.rig.leftArmUpper.rotation.z = 1.1 + Math.sin(t) * 0.45;
-          c.rig.leftArmUpper.rotation.x = Math.cos(t) * 0.55;
-          c.rig.rightArmUpper.rotation.z = -1.1 - Math.sin(t) * 0.45;
-          c.rig.rightArmUpper.rotation.x = -Math.cos(t) * 0.55;
-          c.rig.headPivot.rotation.z = -Math.sin(t) * 0.22;
+          if (c.rig) {
+            c.rig.hips.position.x = Math.sin(t) * 0.14;
+            c.rig.hips.rotation.y = Math.sin(t) * 0.32;
+            c.rig.leftArmUpper.rotation.z = 1.1 + Math.sin(t) * 0.45;
+            c.rig.leftArmUpper.rotation.x = Math.cos(t) * 0.55;
+            c.rig.rightArmUpper.rotation.z = -1.1 - Math.sin(t) * 0.45;
+            c.rig.rightArmUpper.rotation.x = -Math.cos(t) * 0.55;
+            c.rig.headPivot.rotation.z = -Math.sin(t) * 0.22;
+          } else if (c.fbxInstance && this.charLoader) {
+            this.charLoader.animateInstance(c.fbxInstance, 'RUN', t, delta);
+          }
         }
         continue;
       }
@@ -450,14 +479,18 @@ export class PedestrianSystem {
           c.partner = null;
         } else {
           const t = nowTime * 4.0;
-          if (c.isSpeaker) {
-            c.rig.rightArmUpper.rotation.x = -0.45 + Math.sin(t) * 0.24;
-            c.rig.rightArmLower.rotation.x = 0.65 + Math.cos(t) * 0.22;
-            c.rig.headPivot.rotation.x = 0.08 + Math.sin(t * 0.7) * 0.06;
-          } else {
-            c.rig.rightArmUpper.rotation.x = 0.06;
-            c.rig.rightArmLower.rotation.x = 0.22;
-            c.rig.headPivot.rotation.x = Math.max(0, Math.sin(t * 0.8) * 0.08);
+          if (c.rig) {
+            if (c.isSpeaker) {
+              c.rig.rightArmUpper.rotation.x = -0.45 + Math.sin(t) * 0.24;
+              c.rig.rightArmLower.rotation.x = 0.65 + Math.cos(t) * 0.22;
+              c.rig.headPivot.rotation.x = 0.08 + Math.sin(t * 0.7) * 0.06;
+            } else {
+              c.rig.rightArmUpper.rotation.x = 0.06;
+              c.rig.rightArmLower.rotation.x = 0.22;
+              c.rig.headPivot.rotation.x = Math.max(0, Math.sin(t * 0.8) * 0.08);
+            }
+          } else if (c.fbxInstance && this.charLoader) {
+            this.charLoader.animateInstance(c.fbxInstance, 'IDLE', t, delta);
           }
           c.bubbleSprite.position.y = 2.05 + Math.sin(nowTime * 3) * 0.03;
         }
@@ -474,11 +507,15 @@ export class PedestrianSystem {
           c.state = 'WALKING';
           c.speed = c.walkSpeed;
         } else {
-          c.rig.rightArmUpper.rotation.x = -0.65;
-          c.rig.rightArmLower.rotation.x = 1.15;
-          c.rig.leftArmUpper.rotation.x = -0.4;
-          c.rig.leftArmLower.rotation.x = 0.85;
-          c.rig.headPivot.rotation.x = 0.32;
+          if (c.rig) {
+            c.rig.rightArmUpper.rotation.x = -0.65;
+            c.rig.rightArmLower.rotation.x = 1.15;
+            c.rig.leftArmUpper.rotation.x = -0.4;
+            c.rig.leftArmLower.rotation.x = 0.85;
+            c.rig.headPivot.rotation.x = 0.32;
+          } else if (c.fbxInstance && this.charLoader) {
+            this.charLoader.animateInstance(c.fbxInstance, 'IDLE', nowTime, delta);
+          }
         }
         continue;
       }
@@ -490,9 +527,13 @@ export class PedestrianSystem {
           c.state = 'WALKING';
           c.speed = c.walkSpeed;
         } else {
-          c.rig.rightArmUpper.rotation.x = -0.8;
-          c.rig.rightArmLower.rotation.x = 1.3;
-          c.rig.headPivot.rotation.x = -0.12;
+          if (c.rig) {
+            c.rig.rightArmUpper.rotation.x = -0.8;
+            c.rig.rightArmLower.rotation.x = 1.3;
+            c.rig.headPivot.rotation.x = -0.12;
+          } else if (c.fbxInstance && this.charLoader) {
+            this.charLoader.animateInstance(c.fbxInstance, 'IDLE', nowTime, delta);
+          }
         }
         continue;
       }
@@ -504,7 +545,11 @@ export class PedestrianSystem {
           c.state = 'WALKING';
           c.speed = c.walkSpeed;
         } else {
-          c.rig.headPivot.rotation.y = Math.sin(nowTime * 1.5) * 0.45;
+          if (c.rig) {
+            c.rig.headPivot.rotation.y = Math.sin(nowTime * 1.5) * 0.45;
+          } else if (c.fbxInstance && this.charLoader) {
+            this.charLoader.animateInstance(c.fbxInstance, 'IDLE', nowTime, delta);
+          }
         }
         continue;
       }
@@ -569,7 +614,7 @@ export class PedestrianSystem {
                 c.state = 'LAYING';
                 c.stateTimer = 10.0 + Math.random() * 12.0;
                 c.mesh.rotation.x = -Math.PI / 2;
-                c.rig.hips.position.y = 0.28;
+                if (c.rig) c.rig.hips.position.y = 0.28;
                 c.bubbleSprite.visible = true;
                 c.bubbleSprite.material.map = this.bubbleTextures.lay;
                 continue;
@@ -660,37 +705,41 @@ export class PedestrianSystem {
         const phase = c.animPhase;
         const stride = isJogging ? 0.95 : 0.58;
         const armSwing = isJogging ? 0.9 : 0.5;
-        const r = c.rig;
 
-        // Legs
-        r.leftLegUpper.rotation.x = Math.sin(phase) * stride;
-        r.leftLegLower.rotation.x = Math.max(0, -Math.sin(phase) * stride * (isJogging ? 1.1 : 0.85));
+        if (c.rig) {
+          const r = c.rig;
+          // Legs
+          r.leftLegUpper.rotation.x = Math.sin(phase) * stride;
+          r.leftLegLower.rotation.x = Math.max(0, -Math.sin(phase) * stride * (isJogging ? 1.1 : 0.85));
 
-        r.rightLegUpper.rotation.x = -Math.sin(phase) * stride;
-        r.rightLegLower.rotation.x = Math.max(0, Math.sin(phase) * stride * (isJogging ? 1.1 : 0.85));
+          r.rightLegUpper.rotation.x = -Math.sin(phase) * stride;
+          r.rightLegLower.rotation.x = Math.max(0, Math.sin(phase) * stride * (isJogging ? 1.1 : 0.85));
 
-        // Arms
-        if (isJogging) {
-          // Athletic 90-degree bent runner arms
-          r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
-          r.leftArmLower.rotation.x = 0.85;
-          r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
-          r.rightArmLower.rotation.x = 0.85;
-        } else {
-          r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
-          r.leftArmUpper.rotation.z = 0.06;
-          r.leftArmLower.rotation.x = 0.18 + Math.max(0, -Math.sin(phase) * 0.35);
+          // Arms
+          if (isJogging) {
+            // Athletic 90-degree bent runner arms
+            r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
+            r.leftArmLower.rotation.x = 0.85;
+            r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
+            r.rightArmLower.rotation.x = 0.85;
+          } else {
+            r.leftArmUpper.rotation.x = -Math.sin(phase) * armSwing;
+            r.leftArmUpper.rotation.z = 0.06;
+            r.leftArmLower.rotation.x = 0.18 + Math.max(0, -Math.sin(phase) * 0.35);
 
-          r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
-          r.rightArmUpper.rotation.z = -0.06;
-          r.rightArmLower.rotation.x = 0.18 + Math.max(0, Math.sin(phase) * 0.35);
+            r.rightArmUpper.rotation.x = Math.sin(phase) * armSwing;
+            r.rightArmUpper.rotation.z = -0.06;
+            r.rightArmLower.rotation.x = 0.18 + Math.max(0, Math.sin(phase) * 0.35);
+          }
+
+          // Spine and pelvic bounce
+          r.torso.rotation.y = -Math.sin(phase) * 0.08;
+          r.torso.rotation.x = isJogging ? 0.2 : 0.05;
+          r.headPivot.rotation.y = -r.torso.rotation.y * 0.85;
+          r.hips.position.y = 1.35 + Math.abs(Math.sin(phase * 2)) * (isJogging ? 0.12 : 0.06);
+        } else if (c.fbxInstance && this.charLoader) {
+          this.charLoader.animateInstance(c.fbxInstance, isJogging ? 'RUN' : 'WALK', c.animPhase, delta);
         }
-
-        // Spine and pelvic bounce
-        r.torso.rotation.y = -Math.sin(phase) * 0.08;
-        r.torso.rotation.x = isJogging ? 0.2 : 0.05;
-        r.headPivot.rotation.y = -r.torso.rotation.y * 0.85;
-        r.hips.position.y = 1.35 + Math.abs(Math.sin(phase * 2)) * (isJogging ? 0.12 : 0.06);
 
         // Check for spontaneous social chat with nearby walking/jogging citizens
         if (c.talkCooldown <= 0 && !isJogging) {
@@ -727,7 +776,7 @@ export class PedestrianSystem {
                 break;
               } else {
                 // Friendly wave in passing
-                c.rig.rightArmUpper.rotation.z = -1.6;
+                if (c.rig) c.rig.rightArmUpper.rotation.z = -1.6;
                 c.talkCooldown = 6.0;
               }
             }
@@ -779,7 +828,7 @@ export class PedestrianSystem {
     }
 
     // Friendly greeting wave
-    citizen.rig.rightArmUpper.rotation.z = -2.0;
+    if (citizen.rig) citizen.rig.rightArmUpper.rotation.z = -2.0;
     citizen.bubbleSprite.visible = true;
     citizen.bubbleSprite.material.map = this.bubbleTextures.wave;
 
@@ -821,8 +870,10 @@ export class PedestrianSystem {
     if (!citizen) citizen = this.activePlayerCitizen;
     if (!citizen) return;
 
-    citizen.rig.rightArmUpper.rotation.z = -2.2;
-    citizen.rig.rightArmLower.rotation.y = 0.5;
+    if (citizen.rig) {
+      citizen.rig.rightArmUpper.rotation.z = -2.2;
+      citizen.rig.rightArmLower.rotation.y = 0.5;
+    }
     citizen.bubbleSprite.visible = true;
     citizen.bubbleSprite.material.map = this.bubbleTextures.wave;
   }

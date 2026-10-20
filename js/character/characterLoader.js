@@ -1,196 +1,149 @@
 import * as THREE from 'three';
-import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { LowPolyHuman } from './lowPolyHuman.js';
 
 /**
- * CharacterLoader — Loads and manages custom 3D FBX characters (Harpy, Xixi)
- * and bridges them with PlayerController and Multiplayer animations.
+ * CharacterLoader — Universal Stickman Rig & 3D Realistic Wardrobe Engine
+ * 
+ * Manages modular 3D character avatars with full skeletal articulation:
+ * - Harpy (Men): Masculine stickman skeleton, realistic urban bomber jackets, Kaftans, Babban Rigas, fade & Hula caps
+ * - Xixi (Women): Feminine stickman skeleton, stylish urban chic blouses, Atampa dresses, Abayas, Mayafi & ponytails
+ * 
+ * Guarantees smooth, living body movement for all characters, and allows
+ * dynamically adding or changing clothes and hairstyles anytime!
  */
 export class CharacterLoader {
   constructor() {
-    this.fbxLoader = new FBXLoader();
-    this.textureLoader = new THREE.TextureLoader();
-    this.cache = new Map();
-
-    // Registry of available character avatars
+    this.isPreloaded = true;
     this.characters = {
-      'procedural': {
-        id: 'procedural',
-        name: 'Hadejia Explorer',
-        subtitle: 'Authentic Nigerian Low-Poly Citizen',
-        type: 'procedural'
-      },
       'harpy': {
         id: 'harpy',
-        name: 'Harpy',
-        subtitle: 'PBR Stylized Urban Hero',
-        type: 'fbx',
-        fbxPath: './chracter/Harpy/Harpy.fbx',
-        textureDir: './chracter/Harpy/',
-        targetHeight: 1.85
+        gender: 'men',
+        name: 'Harpy (Men)',
+        subtitle: 'Athletic Male Stickman with Realistic Clothes',
+        defaultOutfit: 'harpy_urban',
+        defaultHairstyle: 'hula_zanna'
       },
       'xixi': {
         id: 'xixi',
-        name: 'Xixi',
-        subtitle: 'Anime Stylized Explorer',
-        type: 'fbx',
-        fbxPath: './chracter/xixi/Anime_character.fbx',
-        texturePath: './chracter/xixi/textures.png.png',
-        targetHeight: 1.85
+        gender: 'women',
+        name: 'Xixi (Women)',
+        subtitle: 'Graceful Female Stickman with Realistic Clothes',
+        defaultOutfit: 'xixi_urban',
+        defaultHairstyle: 'hijab_mayafi'
       }
     };
   }
 
   /**
-   * Get list of all available character avatars
+   * Preload character assets and materials
    */
-  getAvailableCharacters() {
-    return Object.values(this.characters);
+  async preloadAll() {
+    this.isPreloaded = true;
+    console.log('[CharacterLoader] Universal Stickman & 3D Realistic Wardrobe engine ready.');
+    return Promise.resolve(true);
   }
 
   /**
-   * Load character by ID
+   * Resolve canonical character ID ('men' -> 'harpy', 'women' -> 'xixi')
    */
-  async loadCharacter(id = 'harpy') {
-    const config = this.characters[id];
-    if (!config || config.type === 'procedural') {
-      return null;
-    }
+  resolveId(id = 'harpy') {
+    const clean = (id || '').toLowerCase();
+    if (clean === 'women' || clean === 'female' || clean === 'xixi') return 'xixi';
+    return 'harpy';
+  }
 
-    if (this.cache.has(id)) {
-      return this._cloneCharacter(this.cache.get(id), id);
-    }
+  resolveGender(id = 'harpy') {
+    return this.resolveId(id) === 'xixi' ? 'women' : 'men';
+  }
 
-    return new Promise((resolve, reject) => {
-      this.fbxLoader.load(
-        config.fbxPath,
-        (fbx) => {
-          this._setupCharacterMaterials(id, fbx, config);
-          this._normalizeCharacterDimensions(fbx, config.targetHeight || 1.85);
+  /**
+   * Create an articulated stickman character with realistic 3D clothes
+   */
+  createCharacter(options = {}) {
+    const rawId = options.id || options.avatarId || 'harpy';
+    const cleanId = this.resolveId(rawId);
+    const gender = this.resolveGender(cleanId);
+    const config = this.characters[cleanId];
 
-          // Cache raw template
-          this.cache.set(id, fbx);
-
-          // Return an active clone
-          const instance = this._cloneCharacter(fbx, id);
-          resolve(instance);
-        },
-        undefined,
-        (err) => {
-          console.error(`[CharacterLoader] Failed to load character ${id}:`, err);
-          reject(err);
-        }
-      );
+    const rig = LowPolyHuman.create({
+      gender,
+      avatarId: cleanId,
+      style: options.style || options.outfit || config.defaultOutfit,
+      hairstyle: options.hairstyle || config.defaultHairstyle,
+      palette: options.palette,
+      scale: options.scale || 0.65,
+      isPlayer: options.isPlayer || false
     });
+
+    return {
+      id: cleanId,
+      gender,
+      name: config.name,
+      rig,
+      root: rig.root,
+      model: rig.root,
+      mesh: rig.root
+    };
   }
 
   /**
-   * Configure materials and textures for the loaded FBX model
+   * Synchronously get character instance
    */
-  _setupCharacterMaterials(id, fbx, config) {
-    if (id === 'harpy') {
-      // Map PBR textures for Harpy
-      const texDir = config.textureDir;
-      const loadTex = (file) => {
-        const tex = this.textureLoader.load(`${texDir}${file}`);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        return tex;
+  getCharacterSync(id = 'harpy', options = {}) {
+    return this.createCharacter({ ...options, id });
+  }
+
+  /**
+   * Asynchronously get character instance
+   */
+  async loadCharacter(id = 'harpy', options = {}) {
+    return Promise.resolve(this.createCharacter({ ...options, id }));
+  }
+
+  /**
+   * Catalogue of available 3D clothes and hairstyles
+   */
+  getWardrobeCatalog(gender = 'men') {
+    if (gender === 'women') {
+      return {
+        outfits: [
+          { id: 'xixi_urban', name: 'Urban Chic Jacket & Blouse' },
+          { id: 'hausa_atampa', name: 'Traditional Wax-Print Atampa Dress' },
+          { id: 'modest_abaya', name: 'Royal Modest Abaya Gown' }
+        ],
+        hairstyles: [
+          { id: 'hijab_mayafi', name: 'Flowing Mayafi / Hijab Veil' },
+          { id: 'ponytail', name: 'High Anime Ponytail' },
+          { id: 'twin_braids', name: 'Twin Braids' },
+          { id: 'chic_bob', name: 'Chic Bob Cut' },
+          { id: 'flowing_hair', name: 'Long Flowing Hair' }
+        ]
       };
-
-      const textures = {
-        skin: loadTex('Skin.png'),
-        hair: loadTex('Hair.png'),
-        face: loadTex('Face.png'),
-        tshirt: loadTex('T-Shirt.png'),
-        jeans: loadTex('Jeans.png'),
-        shoes: loadTex('Shoes.png'),
-        belt: loadTex('Belt.png'),
-        gloves: loadTex('Gloves.png'),
-        inner: loadTex('Inner.png'),
-        eye: loadTex('Eye.png')
-      };
-
-      fbx.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-
-          const mName = (child.name || '').toLowerCase();
-          let targetTex = null;
-
-          if (mName.includes('skin') || mName.includes('body')) targetTex = textures.skin;
-          else if (mName.includes('hair')) targetTex = textures.hair;
-          else if (mName.includes('face') || mName.includes('head')) targetTex = textures.face;
-          else if (mName.includes('shirt') || mName.includes('top')) targetTex = textures.tshirt;
-          else if (mName.includes('jean') || mName.includes('pant')) targetTex = textures.jeans;
-          else if (mName.includes('shoe')) targetTex = textures.shoes;
-          else if (mName.includes('belt')) targetTex = textures.belt;
-          else if (mName.includes('glove')) targetTex = textures.gloves;
-          else if (mName.includes('eye')) targetTex = textures.eye;
-
-          if (targetTex) {
-            child.material = new THREE.MeshStandardMaterial({
-              map: targetTex,
-              roughness: 0.7,
-              metalness: 0.1
-            });
-          }
-        }
-      });
-    } else if (id === 'xixi') {
-      // Single texture atlas for Anime character
-      const mainTex = this.textureLoader.load(config.texturePath);
-      mainTex.colorSpace = THREE.SRGBColorSpace;
-
-      fbx.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-          child.material = new THREE.MeshStandardMaterial({
-            map: mainTex,
-            roughness: 0.65,
-            metalness: 0.1
-          });
-        }
-      });
-    }
-  }
-
-  /**
-   * Rescale and ground the character so it fits standard human height (1.85m)
-   */
-  _normalizeCharacterDimensions(fbx, targetHeight = 1.85) {
-    const box = new THREE.Box3().setFromObject(fbx);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-
-    const currentHeight = size.y;
-    if (currentHeight > 0.001) {
-      const scaleFactor = targetHeight / currentHeight;
-      fbx.scale.multiplyScalar(scaleFactor);
-
-      // Re-evaluate bounding box after scaling to offset root to ground (y = 0)
-      const scaledBox = new THREE.Box3().setFromObject(fbx);
-      fbx.position.y = -scaledBox.min.y;
-    }
-  }
-
-  /**
-   * Clone character with separate animation mixer and bones
-   */
-  _cloneCharacter(template, id) {
-    const clone = template.clone(true);
-    let mixer = null;
-
-    if (template.animations && template.animations.length > 0) {
-      mixer = new THREE.AnimationMixer(clone);
     }
 
     return {
-      id,
-      root: clone,
-      mesh: clone,
-      mixer,
-      animations: template.animations || []
+      outfits: [
+        { id: 'harpy_urban', name: 'Urban Casual Bomber Jacket & Jeans' },
+        { id: 'hausa_kaftan', name: 'Embroidered Hausa Kaftan' },
+        { id: 'hausa_babban_riga', name: 'Royal Babban Riga Robes' },
+        { id: 'emir_guard', name: 'Palace Dogari Guard Uniform' }
+      ],
+      hairstyles: [
+        { id: 'hula_zanna', name: 'Embroidered Hula Cap (Zanna Bukar)' },
+        { id: 'fade', name: 'Urban Fade / Short Crop' },
+        { id: 'rawani_turban', name: 'Scholarly Rawani Turban' },
+        { id: 'afro', name: 'Textured Curly Afro' }
+      ]
     };
+  }
+
+  /**
+   * Procedural animation helper (if calling through loader)
+   */
+  animateInstance(instance, state, animTime, delta) {
+    if (!instance) return;
+    const rig = instance.rig || (instance.userData && instance.userData.rig);
+    if (!rig) return;
+    // Systems drive rig joints directly for 60fps responsiveness
   }
 }

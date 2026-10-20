@@ -171,6 +171,7 @@ wss.on('connection', (ws) => {
     id: playerId,
     name: playerName,
     palette,
+    avatar: 'harpy',
     position: { x: -15, y: 1.87, z: 25 },
     rotation: 0,
     state: 'IDLE',
@@ -217,6 +218,7 @@ wss.on('connection', (ws) => {
           p.state = packet.state || p.state;
           p.isDriving = packet.isDriving || false;
           p.animPhase = packet.animPhase || 0;
+          if (packet.avatar) p.avatar = packet.avatar;
 
           // Broadcast movement update to all other connected players
           broadcast({
@@ -226,8 +228,19 @@ wss.on('connection', (ws) => {
             rotation: p.rotation,
             state: p.state,
             isDriving: p.isDriving,
-            animPhase: p.animPhase
+            animPhase: p.animPhase,
+            avatar: p.avatar
           }, ws);
+        }
+      } else if (packet.type === 'avatar_change') {
+        const p = players.get(ws);
+        if (p) {
+          p.avatar = packet.avatar || 'harpy';
+          broadcast({
+            type: 'player_avatar_change',
+            id: playerId,
+            avatar: p.avatar
+          });
         }
       } else if (packet.type === 'chat') {
         // Player spoken chat / speech bubble

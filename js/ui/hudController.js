@@ -163,6 +163,16 @@ export class HUDController {
     this.signupPassword = document.getElementById('signup-password');
     this.btnSubmitSignup = document.getElementById('btn-submit-signup');
     this.btnGuestMode = document.getElementById('btn-guest-mode');
+
+    // 3D Character Avatar Selector Elements
+    this.btnQuickHarpy = document.getElementById('btn-quick-avatar-harpy');
+    this.btnQuickXixi = document.getElementById('btn-quick-avatar-xixi');
+    this.btnDrawerHarpy = document.getElementById('btn-drawer-avatar-harpy');
+    this.btnDrawerXixi = document.getElementById('btn-drawer-avatar-xixi');
+    this.btnDropdownHarpy = document.getElementById('btn-dropdown-avatar-harpy');
+    this.btnDropdownXixi = document.getElementById('btn-dropdown-avatar-xixi');
+    this.btnMobileHarpy = document.getElementById('btn-m-avatar-harpy');
+    this.btnMobileXixi = document.getElementById('btn-m-avatar-xixi');
   }
 
   _initHighlightBox() {
@@ -444,6 +454,74 @@ export class HUDController {
 
     // 9. Supabase User Authentication & Cloud Passport
     this._bindAuthEvents();
+
+    // 10. Avatar Switcher Controls
+    this._bindAvatarEvents();
+  }
+
+  _bindAvatarEvents() {
+    const bindAvatar = (btn, avatarId) => {
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.setAvatar(avatarId);
+          if (this.app.soundSys) this.app.soundSys.playClick();
+        });
+      }
+    };
+
+    bindAvatar(this.btnQuickHarpy, 'harpy');
+    bindAvatar(this.btnQuickXixi, 'xixi');
+    bindAvatar(this.btnDrawerHarpy, 'harpy');
+    bindAvatar(this.btnDrawerXixi, 'xixi');
+    bindAvatar(this.btnDropdownHarpy, 'harpy');
+    bindAvatar(this.btnDropdownXixi, 'xixi');
+    bindAvatar(this.btnMobileHarpy, 'harpy');
+    bindAvatar(this.btnMobileXixi, 'xixi');
+
+    if (this.app.playerCtrl) {
+      this.app.playerCtrl.onAvatarChange = (avatarId) => {
+        this._updateAvatarUI(avatarId);
+      };
+      this._updateAvatarUI(this.app.playerCtrl.activeAvatar || 'harpy');
+    }
+  }
+
+  setAvatar(avatarId) {
+    const isWomen = (avatarId === 'xixi' || avatarId === 'women' || avatarId === 'female');
+    const cleanId = isWomen ? 'xixi' : 'harpy';
+
+    if (this.app.playerCtrl) {
+      this.app.playerCtrl.setAvatar(cleanId);
+    }
+
+    this._updateAvatarUI(cleanId);
+    this.showToast(isWomen ? '👩 Switched Avatar to Xixi (Women)' : '👨 Switched Avatar to Harpy (Men)');
+  }
+
+  _updateAvatarUI(cleanId) {
+    const isWomen = (cleanId === 'xixi');
+
+    if (this.btnQuickHarpy) this.btnQuickHarpy.classList.toggle('active', !isWomen);
+    if (this.btnQuickXixi) this.btnQuickXixi.classList.toggle('active', isWomen);
+
+    if (this.btnDrawerHarpy) this.btnDrawerHarpy.classList.toggle('active', !isWomen);
+    if (this.btnDrawerXixi) this.btnDrawerXixi.classList.toggle('active', isWomen);
+
+    if (this.btnDropdownHarpy) this.btnDropdownHarpy.classList.toggle('active', !isWomen);
+    if (this.btnDropdownXixi) this.btnDropdownXixi.classList.toggle('active', isWomen);
+
+    if (this.btnMobileHarpy) this.btnMobileHarpy.classList.toggle('active', !isWomen);
+    if (this.btnMobileXixi) this.btnMobileXixi.classList.toggle('active', isWomen);
+
+    const hudAvatar = document.getElementById('player-hud-avatar-icon');
+    if (hudAvatar) hudAvatar.textContent = isWomen ? '👩' : '👨';
+
+    const hudName = document.getElementById('player-hud-name');
+    if (hudName) hudName.textContent = isWomen ? 'XIXI (WOMEN)' : 'HARPY (MEN)';
+
+    const dropdownBadge = document.getElementById('dropdown-avatar-badge');
+    if (dropdownBadge) dropdownBadge.textContent = isWomen ? '👩' : '👨';
   }
 
   _bindMultiplayerEvents() {

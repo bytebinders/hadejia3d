@@ -8,7 +8,7 @@ import { LowPolyHuman } from './lowPolyHuman.js';
  */
 
 export class PlayerController {
-  constructor(scene, camera, domElement, trafficSys = null, collisionSys = null, pedestrianSys = null, soundSys = null) {
+  constructor(scene, camera, domElement, trafficSys = null, collisionSys = null, pedestrianSys = null, soundSys = null, charLoader = null) {
     this.scene = scene;
     this.camera = camera;
     this.domElement = domElement;
@@ -16,9 +16,26 @@ export class PlayerController {
     this.collisionSys = collisionSys;
     this.pedestrianSys = pedestrianSys;
     this.soundSys = soundSys;
+    this.charLoader = charLoader;
 
-    // Build the player character model (scaled realistically)
-    this.rig = LowPolyHuman.create({ isPlayer: true, scale: 0.65 });
+    // Character avatar selection: 'harpy' (Men) or 'xixi' (Women)
+    this.activeAvatar = 'harpy';
+    this.onAvatarChange = null;
+
+    const savedAvatar = typeof localStorage !== 'undefined' ? localStorage.getItem('hadejia3d_avatar') : null;
+    if (savedAvatar) {
+      this.activeAvatar = (savedAvatar === 'women' || savedAvatar === 'female' || savedAvatar === 'xixi') ? 'xixi' : 'harpy';
+    }
+
+    // Build base player stickman model with realistic 3D clothes
+    const isInitWomen = (this.activeAvatar === 'xixi');
+    this.rig = LowPolyHuman.create({
+      isPlayer: true,
+      scale: 0.65,
+      gender: isInitWomen ? 'women' : 'men',
+      avatarId: this.activeAvatar,
+      style: isInitWomen ? 'xixi_urban' : 'harpy_urban'
+    });
     this.mesh = this.rig.root;
     this.groundY = this.collisionSys ? this.collisionSys.getGroundHeight(-15, 25) : 1.87;
     this.mesh.position.set(-15, this.groundY, 25); // Start on top of Central Park pathway
@@ -103,6 +120,10 @@ export class PlayerController {
 
   setCollisionSystem(collisionSys) {
     this.collisionSys = collisionSys;
+  }
+
+  setNetworkManager(networkMgr) {
+    this.networkMgr = networkMgr;
   }
 
   _bindInputs() {
@@ -711,9 +732,50 @@ export class PlayerController {
   }
 
   /**
-   * Procedural Skeletal Animation Engine
+   * Switch between Harpy (Men) and Xixi (Women) stickman rigs with modular 3D clothes
+   */
+  setAvatar(avatarId) {
+    if (!avatarId) return;
+    const cleanId = (avatarId === 'women' || avatarId === 'female' || avatarId === 'xixi') ? 'xixi' : 'harpy';
+    this.activeAvatar = cleanId;
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('hadejia3d_avatar', cleanId);
+    }
+
+    const isWomen = (cleanId === 'xixi');
+    const newRig = LowPolyHuman.create({
+      isPlayer: true,
+      scale: 0.65,
+      gender: isWomen ? 'women' : 'men',
+      avatarId: cleanId,
+      style: isWomen ? 'xixi_urban' : 'harpy_urban',
+      hairstyle: isWomen ? 'hijab_mayafi' : 'hula_zanna'
+    });
+
+    if (newRig && newRig.hips) {
+      // Clear previous body components from mesh
+      while (this.mesh.children.length > 0) {
+        this.mesh.remove(this.mesh.children[0]);
+      }
+      this.mesh.add(newRig.hips);
+      this.rig = newRig;
+    }
+
+    if (this.networkMgr) {
+      this.networkMgr.setLocalPlayerAvatar(this.activeAvatar);
+    }
+
+    if (this.onAvatarChange) {
+      this.onAvatarChange(this.activeAvatar);
+    }
+  }
+
+  /**
+   * Procedural Skeletal Animation Engine (Drives Universal Stickman Rig)
    */
   _animatePose(delta) {
+
     const r = this.rig;
     const t = this.animTime;
 

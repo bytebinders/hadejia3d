@@ -17,10 +17,11 @@ import { VoiceChatManager } from '../audio/voiceChatManager.js';
  */
 
 export class NetworkManager {
-  constructor(scene, playerCtrl, soundSys = null) {
+  constructor(scene, playerCtrl, soundSys = null, charLoader = null) {
     this.scene = scene;
     this.playerCtrl = playerCtrl;
     this.soundSys = soundSys;
+    this.charLoader = charLoader;
 
     this.ws = null;
     this.isConnected = false;
@@ -194,6 +195,17 @@ export class NetworkManager {
             rp.state = packet.state;
             rp.isDriving = packet.isDriving;
             rp.animPhase = packet.animPhase;
+            if (packet.avatar && packet.avatar !== rp.avatarId) {
+              this._switchRemotePlayerAvatar(rp, packet.avatar);
+            }
+          }
+          break;
+        }
+
+        case 'player_avatar_change': {
+          const rp = this.remotePlayers.get(packet.id);
+          if (rp && packet.avatar && packet.avatar !== rp.avatarId) {
+            this._switchRemotePlayerAvatar(rp, packet.avatar);
           }
           break;
         }
@@ -260,19 +272,20 @@ export class NetworkManager {
     if (playerData.id === this.localPlayerId) return;
     if (this.remotePlayers.has(playerData.id)) return;
 
-    // Create articulated human model matching remote player's palette
-    const palette = playerData.palette || {
-      shirtColor: 0x10b981,
-      jacketColor: 0x064e3b,
-      pantsColor: 0x1e293b,
-      shoesColor: 0xfacc15
-    };
+    const isWomen = (playerData.avatar === 'women' || playerData.avatar === 'female' || playerData.avatar === 'xixi');
+    const avatarId = isWomen ? 'xixi' : 'harpy';
+    const gender = isWomen ? 'women' : 'men';
 
+    const palette = playerData.palette || LowPolyHuman.getRandomPalette(gender);
     const rig = LowPolyHuman.create({
+      gender,
+      avatarId,
       palette,
       scale: 0.65,
-      style: 'player'
+      style: isWomen ? 'xixi_urban' : 'harpy_urban',
+      hairstyle: isWomen ? 'hijab_mayafi' : 'hula_zanna'
     });
+
     const mesh = rig.root;
     mesh.name = `RemotePlayer_${playerData.id}`;
 
@@ -296,6 +309,7 @@ export class NetworkManager {
     const remotePlayerObj = {
       id: playerData.id,
       name: playerData.name || 'Citizen',
+      avatarId,
       rig,
       mesh,
       nameTag,
@@ -313,7 +327,34 @@ export class NetworkManager {
     };
 
     this.remotePlayers.set(playerData.id, remotePlayerObj);
-    console.log(`[Multiplayer] Rendered remote player: ${remotePlayerObj.name} (${playerData.id})`);
+    console.log(`[Multiplayer] Rendered remote player: ${remotePlayerObj.name} (${playerData.id}) [${avatarId}]`);
+  }
+
+  /**
+   * Dynamically switch remote player's stickman model between Harpy (Men) and Xixi (Women)
+   */
+  _switchRemotePlayerAvatar(rp, newAvatarId) {
+    if (!newAvatarId) return;
+    const isWomen = (newAvatarId === 'women' || newAvatarId === 'female' || newAvatarId === 'xixi');
+    const cleanId = isWomen ? 'xixi' : 'harpy';
+    if (rp.avatarId === cleanId) return;
+    rp.avatarId = cleanId;
+
+    const newRig = LowPolyHuman.create({
+      gender: isWomen ? 'women' : 'men',
+      avatarId: cleanId,
+      scale: 0.65,
+      style: isWomen ? 'xixi_urban' : 'harpy_urban',
+      hairstyle: isWomen ? 'hijab_mayafi' : 'hula_zanna'
+    });
+
+    if (newRig && newRig.hips) {
+      if (rp.rig && rp.rig.hips) {
+        rp.mesh.remove(rp.rig.hips);
+      }
+      rp.rig = newRig;
+      rp.mesh.add(newRig.hips);
+    }
   }
 
   /**
@@ -546,7 +587,8 @@ export class NetworkManager {
         rotation: pRot,
         state: pState,
         isDriving,
-        animPhase: this.playerCtrl.animTime
+        animPhase: this.playerCtrl.animTime,
+        avatar: this.playerCtrl.activeAvatar || 'harpy'
       }));
     }
   }
@@ -555,6 +597,8 @@ export class NetworkManager {
    * Articulate remote player bones to match their current state in real-time
    */
   _animateRemotePlayerPose(rp, delta) {
+    if (!rp.rig) return;
+
     const r = rp.rig;
     const t = rp.animTime;
 
@@ -690,6 +734,19 @@ export class NetworkManager {
         }));
       } catch (e) {
         console.warn('[Multiplayer] Failed to send name_change:', e);
+      }
+    }
+  }
+
+  setLocalPlayerAvatar(avatar) {
+    if (this.isConnected && this.ws) {
+      try {
+        this.ws.send(JSON.stringify({
+          type: 'avatar_change',
+          avatar
+        }));
+      } catch (e) {
+        console.warn('[Multiplayer] Failed to send avatar_change:', e);
       }
     }
   }

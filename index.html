@@ -114,11 +114,17 @@
         <!-- User Dropdown Popover -->
         <div id="user-dropdown-menu" class="user-dropdown-popover glass-panel hidden">
           <div class="user-dropdown-header">
-            <span class="dropdown-avatar-badge">👤</span>
+            <span class="dropdown-avatar-badge" id="dropdown-avatar-badge">👨</span>
             <div class="dropdown-user-details">
               <strong id="dropdown-username-display">Explorer</strong>
               <span id="dropdown-email-display" class="dropdown-email-text">user@mail.com</span>
             </div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-section-title">CHOOSE 3D AVATAR</div>
+          <div class="dropdown-avatar-row">
+            <button id="btn-dropdown-avatar-harpy" class="dropdown-avatar-btn active"><span>👨</span> Harpy (Men)</button>
+            <button id="btn-dropdown-avatar-xixi" class="dropdown-avatar-btn"><span>👩</span> Xixi (Women)</button>
           </div>
           <div class="dropdown-divider"></div>
           <button id="btn-dropdown-logout" class="dropdown-action-btn logout-btn">
@@ -249,6 +255,29 @@
         </div>
       </div>
 
+      <!-- 3D Avatar Selection (Harpy - Men, Xixi - Women) -->
+      <div class="control-group">
+        <label>3D CHARACTER AVATAR</label>
+        <div class="avatar-card-selector">
+          <button id="btn-drawer-avatar-harpy" class="avatar-card-btn active" title="Play as Harpy (Men)">
+            <span class="avatar-card-icon">👨</span>
+            <div class="avatar-card-info">
+              <strong>Harpy (Men)</strong>
+              <small>Urban Male 3D Model</small>
+            </div>
+            <span class="avatar-card-check">✓</span>
+          </button>
+          <button id="btn-drawer-avatar-xixi" class="avatar-card-btn" title="Play as Xixi (Women)">
+            <span class="avatar-card-icon">👩</span>
+            <div class="avatar-card-info">
+              <strong>Xixi (Women)</strong>
+              <small>Stylized Anime Female</small>
+            </div>
+            <span class="avatar-card-check">✓</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Procedural Re-generate -->
       <div class="control-group">
         <label>GENERATOR</label>
@@ -338,10 +367,16 @@
   <!-- Player Control HUD & Action Bar -->
   <div id="player-hud" class="player-hud glass-panel">
     <div class="player-hud-header">
-      <span class="player-avatar">🏃‍♂️</span>
-      <div class="player-info">
-        <span class="player-name">CITIZEN EXPLORER</span>
-        <span id="player-state-badge" class="badge">IDLE</span>
+      <div class="player-hud-left">
+        <span class="player-avatar" id="player-hud-avatar-icon">👨</span>
+        <div class="player-info">
+          <span class="player-name" id="player-hud-name">HARPY (MEN)</span>
+          <span id="player-state-badge" class="badge">IDLE</span>
+        </div>
+      </div>
+      <div class="player-avatar-quick-pills">
+        <button id="btn-quick-avatar-harpy" class="quick-avatar-pill active" title="Switch to Harpy (Men)">👨 Men</button>
+        <button id="btn-quick-avatar-xixi" class="quick-avatar-pill" title="Switch to Xixi (Women)">👩 Women</button>
       </div>
     </div>
     <div class="player-actions">
@@ -420,6 +455,9 @@
         <button id="btn-m-lay" class="m-tray-btn"><span>🛌</span> Lay</button>
         <button id="btn-m-wave" class="m-tray-btn"><span>👋</span> Wave</button>
         <button id="btn-m-dance" class="m-tray-btn"><span>🕺</span> Dance</button>
+        <div class="m-tray-divider"></div>
+        <button id="btn-m-avatar-harpy" class="m-tray-btn active"><span>👨</span> Harpy (Men)</button>
+        <button id="btn-m-avatar-xixi" class="m-tray-btn"><span>👩</span> Xixi (Women)</button>
       </div>
     </div>
   </div>

@@ -15,6 +15,7 @@ import { NetworkManager } from './network/networkManager.js';
 import { CityMap } from './ui/cityMap.js';
 import { VirtualJoystick } from './ui/virtualJoystick.js';
 import { AuthManager } from './auth/authManager.js';
+import { CharacterLoader } from './character/characterLoader.js';
 
 /**
  * Polis3D — Interactive Low-Poly 3D Metropolis Simulation
@@ -114,10 +115,20 @@ class MetropolisApp {
       this.monorailSys.updateDayNight(nightFactor);
     });
 
+    this._updateLoader(88, 'Loading 3D Characters: Harpy (Men) & Xixi (Women)...');
+
+    // 11.5 Character Loader (Harpy & Xixi)
+    this.charLoader = new CharacterLoader();
+    try {
+      await this.charLoader.preloadAll();
+    } catch (e) {
+      console.warn('[MetropolisApp] Character preload error:', e);
+    }
+
     this._updateLoader(90, 'Spawning Citizens & Player Character...');
 
-    // 12. Pedestrian Crowds & Living Citizens
-    this.pedestrianSys = new PedestrianSystem(this.scene, this.collisionSys);
+    // 12. Pedestrian Crowds & Living Citizens (50% Harpy Men, 50% Xixi Women)
+    this.pedestrianSys = new PedestrianSystem(this.scene, this.collisionSys, this.charLoader);
 
     // 13. Player Controller with Collision Resolution & Citizen Interaction
     this.playerCtrl = new PlayerController(
@@ -127,12 +138,14 @@ class MetropolisApp {
       this.trafficSys,
       this.collisionSys,
       this.pedestrianSys,
-      this.soundSys
+      this.soundSys,
+      this.charLoader
     );
 
     // 13.5 Real-Time Wi-Fi / LAN Multiplayer Engine
     this._updateLoader(92, 'Connecting to Multiplayer Grid...');
-    this.networkMgr = new NetworkManager(this.scene, this.playerCtrl, this.soundSys);
+    this.networkMgr = new NetworkManager(this.scene, this.playerCtrl, this.soundSys, this.charLoader);
+    this.playerCtrl.setNetworkManager(this.networkMgr);
 
     // 13.8 Supabase Authentication System
     this.authMgr = new AuthManager(this);

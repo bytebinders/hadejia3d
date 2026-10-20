@@ -1,31 +1,52 @@
 import * as THREE from 'three';
 
 /**
- * LowPolyHuman — Highly Articulated, Anatomically Detailed Low-Poly Human Generator
+ * LowPolyHuman — Universal Stickman Skeletal Rig with Modular 3D Realistic Clothes & Hairstyles
  * 
- * Creates truly human characters featuring:
- * - Authentic human skin tones, lip tones, and natural hair palettes
- * - Sculpted anatomical head: cranium, defined jawline, chin, cheekbones, and ears
- * - Expressive facial features: white sclera, colored iris, pupil, eyelids, eyebrows, 3D nose, and lips
- * - Anatomical torso: neck with collarbone/throat, pectoral chest plates, tapered waist, and belt loops
- * - Deltoid shoulder caps, biceps, elbow joints, forearms, and wrist accessories (smart watch)
- * - Articulated hands with palm, opposable thumb, and 4 distinct curled fingers (index, middle, ring, pinky)
- * - Anatomical legs: quadriceps, patella kneecaps, calf muscles, ankle bones, and cuffed pants
- * - Realistic sneakers: curved ergonomic sole, white midsole, toe cap, laces, and heel tab
- * - Rich variety of modern hairstyles, urban caps, and beanies
+ * Provides:
+ * - Universal articulated skeletal stickman rig with 12 movable bone joints:
+ *   (hips, torso, headPivot, leftArmUpper, leftArmLower, rightArmUpper, rightArmLower,
+ *    leftLegUpper, leftLegLower, rightLegUpper, rightLegLower)
+ * - Anatomical gender archetypes:
+ *   - Men (Harpy archetype): Broad chest, athletic posture, defined throat / Adam's apple, masculine proportions
+ *   - Women (Xixi archetype): Slender waist, graceful bust contours, feminine hip curve, delicate jewelry
+ * - Super Realistic Modular 3D Clothes:
+ *   - Men: Urban bomber jacket, Kaftan, Royal Babban Riga, Palace Guard, denim jeans, sneakers, leather sandals
+ *   - Women: Urban chic jacket & blouse, traditional Hausa Atampa dress with peplum ruffle & sash, modest Abaya, skirts
+ * - Modular 3D Hairstyles & Headwear:
+ *   - Men: Urban fade, Zanna Bukar embroidered Hula cap, Rawani turban, textured afro, snapback cap
+ *   - Women: Graceful Mayafi / Hijab veil, high anime ponytail, twin braids, chic bob, flowing hair
+ * - Jewelry & Accessories:
+ *   - Men: Smartwatch, leather belt & gold buckle
+ *   - Women: Gold hoop earrings, gold necklace/choker, gold wrist bangles
  */
-
 export class LowPolyHuman {
   /**
-   * Create an articulated, richly detailed human mesh group
+   * Create an articulated human stickman rig dressed in realistic 3D clothes
    * @param {Object} options Configuration options
    */
   static create(options = {}) {
     const isPlayer = options.isPlayer || false;
-    const style = options.style || (isPlayer ? 'player' : this._pickRandomStyle());
+    const rawGender = options.gender || (options.avatarId === 'xixi' || options.avatarId === 'women' || options.avatarId === 'female' ? 'women' : 'men');
+    const gender = (rawGender === 'women' || rawGender === 'female' || rawGender === 'xixi') ? 'women' : 'men';
+    const isWomen = (gender === 'women');
 
-    // 1. Authentic Human Palettes
-    const palette = options.palette || (isPlayer ? this.getPlayerPalette() : this.getRandomPalette());
+    // Style / Outfit selection
+    const style = options.style || options.outfit || (
+      isPlayer
+        ? (isWomen ? 'xixi_urban' : 'harpy_urban')
+        : (isWomen ? this.getRandomWomenStyle() : this.getRandomMenStyle())
+    );
+
+    // Hairstyle selection
+    const hairstyle = options.hairstyle || (
+      isPlayer
+        ? (isWomen ? 'hijab_mayafi' : 'hula_zanna')
+        : (isWomen ? this.getRandomWomenHairstyle() : this.getRandomMenHairstyle())
+    );
+
+    // Palettes
+    const palette = options.palette || (isPlayer ? this.getPlayerPalette(gender) : this.getRandomPalette(gender));
     const skinColor = options.skinColor || palette.skinColor;
     const lipColor = options.lipColor || palette.lipColor;
     const eyeColor = options.eyeColor || palette.eyeColor;
@@ -63,7 +84,7 @@ export class LowPolyHuman {
     };
 
     const root = new THREE.Group();
-    root.name = isPlayer ? 'Player' : `Human_${style}`;
+    root.name = isPlayer ? `Player_${gender}` : `Citizen_${gender}_${style}`;
 
     // Standardized uniform scale (0.65)
     const baseScale = options.scale !== undefined ? options.scale : 0.65;
@@ -76,33 +97,47 @@ export class LowPolyHuman {
     hips.position.y = 1.35;
     root.add(hips);
 
-    // Sculpted pelvis with anatomically tapered sacrum and waistline
-    const pelvisGeo = new THREE.CylinderGeometry(0.35, 0.32, 0.36, 8);
+    // Proportions: Men have athletic narrower hips, Women have wider feminine hip curve
+    const pelvisTop = isWomen ? 0.30 : 0.35;
+    const pelvisBottom = isWomen ? 0.38 : 0.32;
+    const pelvisH = isWomen ? 0.34 : 0.36;
+
+    const pelvisGeo = new THREE.CylinderGeometry(pelvisTop, pelvisBottom, pelvisH, 8);
     pelvisGeo.rotateY(Math.PI / 8);
     const pelvis = new THREE.Mesh(pelvisGeo, materials.pants);
     pelvis.castShadow = true;
     hips.add(pelvis);
 
-    // Leather Belt
-    const beltGeo = new THREE.CylinderGeometry(0.37, 0.37, 0.08, 8);
+    // Belt or Waistband
+    const beltTop = isWomen ? 0.31 : 0.37;
+    const beltGeo = new THREE.CylinderGeometry(beltTop, beltTop, 0.08, 8);
     beltGeo.rotateY(Math.PI / 8);
-    const belt = new THREE.Mesh(beltGeo, materials.beltLeather);
-    belt.position.y = 0.14;
+    const belt = new THREE.Mesh(beltGeo, isWomen ? materials.secondary : materials.beltLeather);
+    belt.position.y = 0.13;
     hips.add(belt);
 
-    // Belt loops
-    const loopGeo = new THREE.BoxGeometry(0.03, 0.1, 0.03);
-    [-0.22, -0.08, 0.08, 0.22].forEach(x => {
-      const loop = new THREE.Mesh(loopGeo, materials.pants);
-      loop.position.set(x, 0.14, 0.37);
-      hips.add(loop);
-    });
-
-    // Metallic Belt Buckle
-    const buckleGeo = new THREE.BoxGeometry(0.12, 0.09, 0.04);
+    // Belt Buckle
+    const buckleGeo = new THREE.BoxGeometry(0.12, 0.08, 0.04);
     const buckle = new THREE.Mesh(buckleGeo, materials.buckleGold);
-    buckle.position.set(0, 0.14, 0.38);
+    buckle.position.set(0, 0.13, isWomen ? 0.32 : 0.38);
     hips.add(buckle);
+
+    // Traditional Atampa Wrapper (Zani) / Long Skirt Over-layer for Women
+    if (isWomen && (style === 'hausa_atampa' || style === 'modest_abaya')) {
+      const zaniGeo = new THREE.CylinderGeometry(0.38, 0.44, 0.72, 8);
+      zaniGeo.rotateY(Math.PI / 8);
+      const zani = new THREE.Mesh(zaniGeo, materials.pants);
+      zani.position.y = -0.32;
+      zani.castShadow = true;
+      hips.add(zani);
+
+      // Wrapper border trim
+      const zaniBorderGeo = new THREE.CylinderGeometry(0.442, 0.442, 0.08, 8);
+      zaniBorderGeo.rotateY(Math.PI / 8);
+      const zaniBorder = new THREE.Mesh(zaniBorderGeo, materials.secondary);
+      zaniBorder.position.y = -0.66;
+      hips.add(zaniBorder);
+    }
 
     // ==========================================
     // 2. TORSO & CHEST
@@ -111,317 +146,364 @@ export class LowPolyHuman {
     torso.position.y = 0.2;
     hips.add(torso);
 
-    // Main Torso (broad at chest and shoulders, tapered at waist)
-    const torsoGeo = new THREE.CylinderGeometry(0.44, 0.34, 0.85, 8);
+    // Torso Dimensions:
+    // Men: broad chest (0.44), tapered waist (0.34)
+    // Women: slender waist (0.28), graceful hourglass silhouette (0.36)
+    const torsoTop = isWomen ? 0.36 : 0.44;
+    const torsoBottom = isWomen ? 0.28 : 0.34;
+    const torsoH = isWomen ? 0.78 : 0.85;
+
+    const torsoGeo = new THREE.CylinderGeometry(torsoTop, torsoBottom, torsoH, 8);
     torsoGeo.rotateY(Math.PI / 8);
     const torsoMesh = new THREE.Mesh(torsoGeo, materials.primary);
-    torsoMesh.position.y = 0.45;
+    torsoMesh.position.y = torsoH / 2;
     torsoMesh.castShadow = true;
     torso.add(torsoMesh);
 
-    // Sculpted Pectoral Chest definition (left & right pecs)
-    const pecGeo = new THREE.BoxGeometry(0.24, 0.26, 0.1);
-    const leftPec = new THREE.Mesh(pecGeo, materials.primary);
-    leftPec.position.set(0.13, 0.58, 0.24);
-    leftPec.rotation.y = 0.12;
-    torso.add(leftPec);
+    // Anatomical Chest Definition:
+    if (isWomen) {
+      // Sculpted Feminine Bust Contours
+      const bustGeo = new THREE.SphereGeometry(0.12, 8, 8);
+      bustGeo.scale(1, 0.9, 1.2);
 
-    const rightPec = new THREE.Mesh(pecGeo, materials.primary);
-    rightPec.position.set(-0.13, 0.58, 0.24);
-    rightPec.rotation.y = -0.12;
-    torso.add(rightPec);
+      const leftBust = new THREE.Mesh(bustGeo, materials.primary);
+      leftBust.position.set(0.11, 0.50, 0.22);
+      torso.add(leftBust);
 
-    // Shirt Collar at neck base
-    const collarGeo = new THREE.CylinderGeometry(0.18, 0.24, 0.08, 8);
-    collarGeo.rotateY(Math.PI / 8);
-    const collar = new THREE.Mesh(collarGeo, materials.shirtCollar);
-    collar.position.y = 0.88;
-    torso.add(collar);
+      const rightBust = new THREE.Mesh(bustGeo, materials.primary);
+      rightBust.position.set(-0.11, 0.50, 0.22);
+      torso.add(rightBust);
 
-    // Traditional Hausa / Fulani Chest Detailing & Embroidery
-    if (style === 'emir_guard') {
-      // Royal Dogari of the Emir of Hadejia (Iconic Scarlet Red & Forest Green Royal Robe)
-      const guardStripeGeo = new THREE.BoxGeometry(0.22, 0.82, 0.08);
-      const guardStripe = new THREE.Mesh(guardStripeGeo, new THREE.MeshStandardMaterial({ color: 0xbe123c, roughness: 0.7, flatShading: true }));
-      guardStripe.position.set(-0.11, 0.45, 0.28);
-      torso.add(guardStripe);
-
-      const guardStripeRight = new THREE.Mesh(guardStripeGeo, new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.7, flatShading: true }));
-      guardStripeRight.position.set(0.11, 0.45, 0.28);
-      torso.add(guardStripeRight);
-
-      // Golden Royal Crest / Medallion
-      const crestGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.04, 8);
-      crestGeo.rotateX(Math.PI / 2);
-      const crest = new THREE.Mesh(crestGeo, materials.buckleGold);
-      crest.position.set(0, 0.62, 0.32);
-      torso.add(crest);
-
-    } else if (style === 'hausa_atampa') {
-      // Traditional Wax-Print Atampa & Graceful Sash
-      const sashGeo = new THREE.BoxGeometry(0.16, 0.88, 0.06);
-      const sash = new THREE.Mesh(sashGeo, materials.secondary);
-      sash.position.set(0.05, 0.45, 0.28);
-      sash.rotation.z = -0.15;
-      torso.add(sash);
-
-      // Peplum waist ruffle
-      const peplumGeo = new THREE.CylinderGeometry(0.38, 0.48, 0.2, 8);
-      peplumGeo.rotateY(Math.PI / 8);
-      const peplum = new THREE.Mesh(peplumGeo, materials.primary);
-      peplum.position.set(0, 0.08, 0);
-      torso.add(peplum);
+      // Chic Blouse Neckline
+      const vNeckGeo = new THREE.BoxGeometry(0.16, 0.16, 0.05);
+      const vNeck = new THREE.Mesh(vNeckGeo, materials.skin);
+      vNeck.position.set(0, 0.70, 0.20);
+      torso.add(vNeck);
 
     } else {
-      // Traditional Embroidered Hausa Kaftan / Babban Riga Chest Piece (Aska Biyu)
-      const embroPlateGeo = new THREE.BoxGeometry(0.26, 0.48, 0.05);
-      const embroPlate = new THREE.Mesh(embroPlateGeo, materials.secondary);
-      embroPlate.position.set(0, 0.52, 0.28);
-      torso.add(embroPlate);
+      // Sculpted Masculine Pectoral Plates
+      const pecGeo = new THREE.BoxGeometry(0.24, 0.26, 0.1);
 
-      // Intricate golden needlework center motif
-      const centerNeedleGeo = new THREE.BoxGeometry(0.08, 0.36, 0.07);
-      const centerNeedle = new THREE.Mesh(centerNeedleGeo, materials.buckleGold);
-      centerNeedle.position.set(0, 0.52, 0.29);
-      torso.add(centerNeedle);
+      const leftPec = new THREE.Mesh(pecGeo, materials.primary);
+      leftPec.position.set(0.13, 0.58, 0.24);
+      leftPec.rotation.y = 0.12;
+      torso.add(leftPec);
 
-      // Twin embroidered knives motif (Aska Biyu)
-      [-0.08, 0.08].forEach(x => {
-        const askaGeo = new THREE.BoxGeometry(0.025, 0.28, 0.065);
-        const aska = new THREE.Mesh(askaGeo, materials.shirtCollar);
-        aska.position.set(x, 0.50, 0.29);
-        torso.add(aska);
-      });
+      const rightPec = new THREE.Mesh(pecGeo, materials.primary);
+      rightPec.position.set(-0.13, 0.58, 0.24);
+      rightPec.rotation.y = -0.12;
+      torso.add(rightPec);
 
-      // Flowing Babban Riga shoulder drapes for nobles and elders
-      if (style === 'hausa_babban_riga' || style === 'traditional_scholar' || isPlayer) {
-        [-0.38, 0.38].forEach((x, idx) => {
-          const drapeGeo = new THREE.BoxGeometry(0.18, 0.72, 0.22);
-          const drape = new THREE.Mesh(drapeGeo, materials.primary);
-          drape.position.set(x, 0.44, 0);
-          drape.rotation.z = idx === 0 ? 0.1 : -0.1;
-          torso.add(drape);
-        });
-      }
+      // Shirt Collar
+      const collarGeo = new THREE.CylinderGeometry(0.18, 0.24, 0.08, 8);
+      collarGeo.rotateY(Math.PI / 8);
+      const collar = new THREE.Mesh(collarGeo, materials.shirtCollar);
+      collar.position.y = 0.88;
+      torso.add(collar);
     }
 
-    // Optional traveler shoulder pouch or student bag
-    if (style === 'traditional_scholar' || style === 'wetland_fisherman') {
-      const bagGeo = new THREE.BoxGeometry(0.32, 0.38, 0.12);
-      const bag = new THREE.Mesh(bagGeo, materials.backpack);
-      bag.position.set(0.28, 0.32, 0.15);
-      bag.castShadow = true;
-      torso.add(bag);
+    // Outfit-Specific 3D Clothes Details:
+    if (isWomen) {
+      if (style === 'hausa_atampa') {
+        // Traditional Peplum Ruffle at waist
+        const peplumGeo = new THREE.CylinderGeometry(0.30, 0.44, 0.18, 8);
+        peplumGeo.rotateY(Math.PI / 8);
+        const peplum = new THREE.Mesh(peplumGeo, materials.primary);
+        peplum.position.y = 0.08;
+        torso.add(peplum);
 
-      const strapGeo = new THREE.BoxGeometry(0.05, 0.85, 0.03);
-      const strap = new THREE.Mesh(strapGeo, materials.beltLeather);
-      strap.position.set(0.08, 0.52, 0.22);
-      strap.rotation.z = 0.45;
-      torso.add(strap);
+        // Elegant Cross-Body Sash
+        const sashGeo = new THREE.BoxGeometry(0.14, 0.82, 0.06);
+        const sash = new THREE.Mesh(sashGeo, materials.secondary);
+        sash.position.set(0.04, 0.44, 0.26);
+        sash.rotation.z = -0.18;
+        torso.add(sash);
+
+      } else if (style === 'xixi_urban') {
+        // Modern Cropped Jacket with Lapels
+        const jacketLeft = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.44, 0.08), materials.secondary);
+        jacketLeft.position.set(0.16, 0.48, 0.22);
+        torso.add(jacketLeft);
+
+        const jacketRight = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.44, 0.08), materials.secondary);
+        jacketRight.position.set(-0.16, 0.48, 0.22);
+        torso.add(jacketRight);
+
+        // Gold zipper / clasp
+        const zipperGeo = new THREE.BoxGeometry(0.03, 0.40, 0.02);
+        const zipper = new THREE.Mesh(zipperGeo, materials.buckleGold);
+        zipper.position.set(0, 0.48, 0.25);
+        torso.add(zipper);
+
+      } else if (style === 'modest_abaya') {
+        // Flowing Golden Neckline Embroidery
+        const embroGeo = new THREE.BoxGeometry(0.18, 0.46, 0.04);
+        const embro = new THREE.Mesh(embroGeo, materials.buckleGold);
+        embro.position.set(0, 0.50, 0.22);
+        torso.add(embro);
+      }
+
+    } else {
+      // Men's Outfits
+      if (style === 'harpy_urban') {
+        // Urban Bomber / Denim Jacket
+        const jacketLapelL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.58, 0.08), materials.secondary);
+        jacketLapelL.position.set(0.20, 0.50, 0.24);
+        torso.add(jacketLapelL);
+
+        const jacketLapelR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.58, 0.08), materials.secondary);
+        jacketLapelR.position.set(-0.20, 0.50, 0.24);
+        torso.add(jacketLapelR);
+
+        // Metallic Center Zipper
+        const zipper = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.60, 0.03), materials.watchCase);
+        zipper.position.set(0, 0.48, 0.26);
+        torso.add(zipper);
+
+      } else if (style === 'emir_guard') {
+        // Palace Dogari Guard Robe
+        const guardStripeL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.82, 0.08), new THREE.MeshStandardMaterial({ color: 0xbe123c, roughness: 0.7, flatShading: true }));
+        guardStripeL.position.set(-0.11, 0.45, 0.28);
+        torso.add(guardStripeL);
+
+        const guardStripeR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.82, 0.08), new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.7, flatShading: true }));
+        guardStripeR.position.set(0.11, 0.45, 0.28);
+        torso.add(guardStripeR);
+
+        // Golden Royal Palace Crest Medallion
+        const crest = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.04, 8), materials.buckleGold);
+        crest.rotateX(Math.PI / 2);
+        crest.position.set(0, 0.62, 0.32);
+        torso.add(crest);
+
+      } else {
+        // Traditional Embroidered Kaftan / Babban Riga
+        const embroPlate = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.48, 0.05), materials.secondary);
+        embroPlate.position.set(0, 0.52, 0.28);
+        torso.add(embroPlate);
+
+        // Golden needlework center motif
+        const centerNeedle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.36, 0.07), materials.buckleGold);
+        centerNeedle.position.set(0, 0.52, 0.29);
+        torso.add(centerNeedle);
+
+        // Flowing Babban Riga shoulder drapes
+        if (style === 'hausa_babban_riga' || isPlayer) {
+          [-0.38, 0.38].forEach((x, idx) => {
+            const drape = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.72, 0.22), materials.primary);
+            drape.position.set(x, 0.44, 0);
+            drape.rotation.z = idx === 0 ? 0.1 : -0.1;
+            torso.add(drape);
+          });
+        }
+      }
     }
 
     // ==========================================
     // 3. NECK, HEAD & FACIAL FEATURES
     // ==========================================
     const headPivot = new THREE.Group();
-    headPivot.position.y = 0.94;
+    headPivot.position.y = isWomen ? 0.88 : 0.94;
     torso.add(headPivot);
 
-    // Sculpted Neck with throat & Adam's apple
-    const neckGeo = new THREE.CylinderGeometry(0.12, 0.15, 0.22, 8);
+    // Sculpted Neck
+    const neckTop = isWomen ? 0.095 : 0.12;
+    const neckBottom = isWomen ? 0.12 : 0.15;
+    const neckH = isWomen ? 0.20 : 0.22;
+
+    const neckGeo = new THREE.CylinderGeometry(neckTop, neckBottom, neckH, 8);
     const neck = new THREE.Mesh(neckGeo, materials.skin);
     neck.position.y = 0.1;
     headPivot.add(neck);
 
-    // Laryngeal bump (Adam's apple / throat definition)
-    const throatGeo = new THREE.BoxGeometry(0.04, 0.05, 0.03);
-    const throat = new THREE.Mesh(throatGeo, materials.skin);
-    throat.position.set(0, 0.1, 0.14);
-    headPivot.add(throat);
+    if (isWomen) {
+      // Elegant Gold Choker / Necklace
+      const necklaceGeo = new THREE.TorusGeometry(0.11, 0.012, 6, 12);
+      necklaceGeo.rotateX(Math.PI / 2);
+      const necklace = new THREE.Mesh(necklaceGeo, materials.buckleGold);
+      necklace.position.y = 0.08;
+      headPivot.add(necklace);
+    } else {
+      // Adam's apple bump for men
+      const throat = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.03), materials.skin);
+      throat.position.set(0, 0.1, 0.14);
+      headPivot.add(throat);
+    }
 
-    // Anatomical Head (Cranium + Cheekbones + Temples)
-    const headGeo = new THREE.CylinderGeometry(0.26, 0.22, 0.5, 8);
+    // Anatomical Head (Cranium + Cheekbones)
+    const headRadius = isWomen ? 0.23 : 0.26;
+    const headGeo = new THREE.CylinderGeometry(headRadius, headRadius * 0.85, 0.48, 8);
     headGeo.rotateY(Math.PI / 8);
     const head = new THREE.Mesh(headGeo, materials.skin);
-    head.position.y = 0.42;
+    head.position.y = 0.40;
     head.castShadow = true;
     headPivot.add(head);
 
-    // Sculpted Chin & Jawline
-    const chinGeo = new THREE.BoxGeometry(0.18, 0.14, 0.16);
-    const chin = new THREE.Mesh(chinGeo, materials.skin);
-    chin.position.set(0, 0.22, 0.18);
+    // Chin & Jawline
+    const chinWidth = isWomen ? 0.14 : 0.18;
+    const chin = new THREE.Mesh(new THREE.BoxGeometry(chinWidth, 0.13, 0.15), materials.skin);
+    chin.position.set(0, 0.21, 0.17);
     chin.rotation.x = -0.2;
     headPivot.add(chin);
 
     // Cheekbones (left & right)
-    [-0.17, 0.17].forEach(x => {
-      const cheekGeo = new THREE.BoxGeometry(0.09, 0.12, 0.1);
-      const cheek = new THREE.Mesh(cheekGeo, materials.skin);
-      cheek.position.set(x, 0.38, 0.19);
+    [-0.16, 0.16].forEach(x => {
+      const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.11, 0.09), materials.skin);
+      cheek.position.set(x, 0.36, 0.18);
       headPivot.add(cheek);
     });
 
-    // Anatomical Ears (Left & Right with inner ear shadow)
-    [-0.26, 0.26].forEach((x, idx) => {
+    // Anatomical Ears with Gold Earrings for Women
+    [-0.25, 0.25].forEach((x, idx) => {
       const earGroup = new THREE.Group();
-      earGroup.position.set(x, 0.42, 0.02);
+      earGroup.position.set(x, 0.40, 0.02);
       earGroup.rotation.y = idx === 0 ? -0.2 : 0.2;
 
-      const outerEarGeo = new THREE.BoxGeometry(0.04, 0.13, 0.08);
-      const outerEar = new THREE.Mesh(outerEarGeo, materials.skin);
+      const outerEar = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.07), materials.skin);
       outerEar.castShadow = true;
       earGroup.add(outerEar);
 
-      const innerEarGeo = new THREE.BoxGeometry(0.02, 0.08, 0.04);
-      const innerEar = new THREE.Mesh(innerEarGeo, materials.lips);
-      innerEar.position.set(idx === 0 ? 0.015 : -0.015, 0, 0.01);
-      earGroup.add(innerEar);
+      if (isWomen) {
+        // Gold Hoop Earrings
+        const earringGeo = new THREE.TorusGeometry(0.038, 0.007, 6, 12);
+        const earring = new THREE.Mesh(earringGeo, materials.buckleGold);
+        earring.position.set(0, -0.06, 0.02);
+        earGroup.add(earring);
+      }
 
       headPivot.add(earGroup);
     });
 
-    // Sculpted 3D Human Nose
-    const noseBridgeGeo = new THREE.BoxGeometry(0.05, 0.14, 0.08);
-    const noseBridge = new THREE.Mesh(noseBridgeGeo, materials.skin);
-    noseBridge.position.set(0, 0.38, 0.27);
-    noseBridge.rotation.x = 0.22; // Natural slope
+    // 3D Human Nose
+    const noseBridge = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.13, 0.07), materials.skin);
+    noseBridge.position.set(0, 0.36, 0.25);
+    noseBridge.rotation.x = 0.22;
     headPivot.add(noseBridge);
 
-    // Nose tip and nostrils
-    const noseTipGeo = new THREE.BoxGeometry(0.07, 0.05, 0.07);
-    const noseTip = new THREE.Mesh(noseTipGeo, materials.skin);
-    noseTip.position.set(0, 0.33, 0.29);
+    const noseTip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.045, 0.06), materials.skin);
+    noseTip.position.set(0, 0.31, 0.27);
     headPivot.add(noseTip);
 
-    // Expressive Human Eyes (Left & Right)
-    const eyeSpacing = 0.1;
+    // Expressive Eyes
+    const eyeSpacing = isWomen ? 0.09 : 0.10;
     [-eyeSpacing, eyeSpacing].forEach((x, idx) => {
       const eyeGroup = new THREE.Group();
-      eyeGroup.position.set(x, 0.44, 0.25);
+      eyeGroup.position.set(x, 0.42, 0.23);
 
-      // Sclera (White of eye)
-      const scleraGeo = new THREE.BoxGeometry(0.07, 0.045, 0.02);
-      const sclera = new THREE.Mesh(scleraGeo, materials.eyeWhite);
+      // Sclera (white)
+      const sclera = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.042, 0.02), materials.eyeWhite);
       eyeGroup.add(sclera);
 
       // Colored Iris
-      const irisGeo = new THREE.BoxGeometry(0.038, 0.038, 0.025);
-      const iris = new THREE.Mesh(irisGeo, materials.eyeIris);
+      const iris = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.036, 0.025), materials.eyeIris);
       iris.position.z = 0.005;
       eyeGroup.add(iris);
 
       // Pupil
-      const pupilGeo = new THREE.BoxGeometry(0.02, 0.02, 0.03);
-      const pupil = new THREE.Mesh(pupilGeo, materials.eyePupil);
+      const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.018, 0.03), materials.eyePupil);
       pupil.position.z = 0.008;
       eyeGroup.add(pupil);
 
-      // Upper Eyelid / Lash Line (Adds depth & life to gaze)
-      const lashGeo = new THREE.BoxGeometry(0.078, 0.015, 0.028);
-      const lash = new THREE.Mesh(lashGeo, materials.eyebrow);
-      lash.position.set(0, 0.024, 0.006);
+      // Eyelash Line / Eye Wing (slight feminine lift for women)
+      const lash = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.014, 0.026), materials.eyebrow);
+      lash.position.set(0, 0.022, 0.006);
+      if (isWomen) lash.rotation.z = idx === 0 ? 0.08 : -0.08;
       eyeGroup.add(lash);
 
-      // Eyebrows (Arched naturally above eye)
-      const browGeo = new THREE.BoxGeometry(0.085, 0.022, 0.03);
-      const brow = new THREE.Mesh(browGeo, materials.eyebrow);
-      brow.position.set(0, 0.062, 0.01);
-      brow.rotation.z = idx === 0 ? 0.06 : -0.06; // Subtle natural arch
+      // Eyebrow
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.03), materials.eyebrow);
+      brow.position.set(0, 0.058, 0.01);
+      brow.rotation.z = idx === 0 ? 0.06 : -0.06;
       eyeGroup.add(brow);
 
       headPivot.add(eyeGroup);
     });
 
-    // Human Lips & Mouth (Natural resting expression)
-    const upperLipGeo = new THREE.BoxGeometry(0.12, 0.025, 0.04);
-    const upperLip = new THREE.Mesh(upperLipGeo, materials.lips);
-    upperLip.position.set(0, 0.27, 0.26);
+    // Lips & Mouth
+    const upperLip = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.025, 0.04), materials.lips);
+    upperLip.position.set(0, 0.25, 0.24);
     headPivot.add(upperLip);
 
-    const lowerLipGeo = new THREE.BoxGeometry(0.1, 0.03, 0.04);
-    const lowerLip = new THREE.Mesh(lowerLipGeo, materials.lips);
-    lowerLip.position.set(0, 0.245, 0.255);
+    const lowerLip = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.03, 0.04), materials.lips);
+    lowerLip.position.set(0, 0.225, 0.235);
     headPivot.add(lowerLip);
 
-    // Hairstyle / Headwear
-    this._addHairstyle(headPivot, materials, isPlayer, style);
+    // Modular Hairstyle & Headwear
+    this._addHairstyle(headPivot, materials, isPlayer, style, gender, hairstyle);
 
     // ==========================================
     // 4. ARMS & DETAILED 5-FINGER HANDS
     // ==========================================
-    const armUpperL = 0.46;
-    const armLowerL = 0.46;
+    const armUpperL = isWomen ? 0.42 : 0.46;
+    const armLowerL = isWomen ? 0.42 : 0.46;
+    const shoulderOffset = isWomen ? 0.40 : 0.50;
+    const armThickness = isWomen ? 0.085 : 0.11;
 
     // LEFT ARM
     const leftArmUpper = new THREE.Group();
-    leftArmUpper.position.set(0.5, 0.8, 0);
+    leftArmUpper.position.set(shoulderOffset, isWomen ? 0.74 : 0.80, 0);
     torso.add(leftArmUpper);
 
-    // Deltoid Shoulder Cap (blends arm into torso)
-    const lDeltoidGeo = new THREE.DodecahedronGeometry(0.14, 0);
-    const lDeltoid = new THREE.Mesh(lDeltoidGeo, materials.secondary);
-    lDeltoid.position.y = 0;
+    // Shoulder cap
+    const lDeltoid = new THREE.Mesh(new THREE.DodecahedronGeometry(armThickness * 1.3, 0), materials.secondary);
     leftArmUpper.add(lDeltoid);
 
-    // Upper Arm / Bicep
-    const lUpperGeo = new THREE.CylinderGeometry(0.11, 0.09, armUpperL, 6);
-    const lUpperMesh = new THREE.Mesh(lUpperGeo, materials.secondary);
+    // Bicep / Upper Arm
+    const lUpperMesh = new THREE.Mesh(new THREE.CylinderGeometry(armThickness, armThickness * 0.85, armUpperL, 6), materials.secondary);
     lUpperMesh.position.y = -armUpperL / 2;
     lUpperMesh.castShadow = true;
     leftArmUpper.add(lUpperMesh);
 
-    // Left Forearm Pivot (Elbow joint)
+    // Forearm Pivot (Elbow joint)
     const leftArmLower = new THREE.Group();
     leftArmLower.position.y = -armUpperL;
     leftArmUpper.add(leftArmLower);
 
-    // Elbow joint cap
-    const lElbowGeo = new THREE.DodecahedronGeometry(0.09, 0);
-    const lElbow = new THREE.Mesh(lElbowGeo, materials.secondary);
-    lElbow.position.set(0, 0, -0.04);
+    // Elbow cap
+    const lElbow = new THREE.Mesh(new THREE.DodecahedronGeometry(armThickness * 0.9, 0), materials.secondary);
+    lElbow.position.set(0, 0, -0.03);
     leftArmLower.add(lElbow);
 
     // Forearm
-    const lLowerGeo = new THREE.CylinderGeometry(0.095, 0.075, armLowerL, 6);
-    const lLowerMesh = new THREE.Mesh(lLowerGeo, materials.skin);
+    const lLowerMesh = new THREE.Mesh(new THREE.CylinderGeometry(armThickness * 0.85, armThickness * 0.7, armLowerL, 6), materials.skin);
     lLowerMesh.position.y = -armLowerL / 2;
     lLowerMesh.castShadow = true;
     leftArmLower.add(lLowerMesh);
 
-    // Modern Smartwatch on Left Wrist
-    const watchGroup = new THREE.Group();
-    watchGroup.position.y = -armLowerL + 0.06;
+    // Wrist Accessory: Smartwatch for Men, Gold Bangles for Women
+    if (isWomen) {
+      const bangleGeo = new THREE.TorusGeometry(0.075, 0.012, 6, 12);
+      bangleGeo.rotateX(Math.PI / 2);
+      const bangle = new THREE.Mesh(bangleGeo, materials.buckleGold);
+      bangle.position.y = -armLowerL + 0.06;
+      leftArmLower.add(bangle);
+    } else {
+      const watchGroup = new THREE.Group();
+      watchGroup.position.y = -armLowerL + 0.06;
+      const strap = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.082, 0.04, 8), materials.watchStrap);
+      watchGroup.add(strap);
+      const watchFace = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.02), materials.watchCase);
+      watchFace.position.set(0, 0, 0.08);
+      watchGroup.add(watchFace);
+      leftArmLower.add(watchGroup);
+    }
 
-    const strapGeo = new THREE.CylinderGeometry(0.082, 0.082, 0.04, 8);
-    const strap = new THREE.Mesh(strapGeo, materials.watchStrap);
-    watchGroup.add(strap);
-
-    const watchFaceGeo = new THREE.BoxGeometry(0.06, 0.05, 0.02);
-    const watchFace = new THREE.Mesh(watchFaceGeo, materials.watchCase);
-    watchFace.position.set(0, 0, 0.08);
-    watchGroup.add(watchFace);
-    leftArmLower.add(watchGroup);
-
-    // Detailed Left Hand (Palm + Opposable Thumb + 4 Curled Fingers)
-    const lHand = this._createDetailedHand(materials.skin, true);
+    // Detailed Left Hand
+    const lHand = this._createDetailedHand(materials.skin, true, isWomen);
     lHand.position.y = -armLowerL;
     leftArmLower.add(lHand);
 
     // RIGHT ARM
     const rightArmUpper = new THREE.Group();
-    rightArmUpper.position.set(-0.5, 0.8, 0);
+    rightArmUpper.position.set(-shoulderOffset, isWomen ? 0.74 : 0.80, 0);
     torso.add(rightArmUpper);
 
-    // Right Deltoid Shoulder Cap
-    const rDeltoidGeo = new THREE.DodecahedronGeometry(0.14, 0);
-    const rDeltoid = new THREE.Mesh(rDeltoidGeo, materials.secondary);
-    rDeltoid.position.y = 0;
+    // Right Shoulder cap
+    const rDeltoid = new THREE.Mesh(new THREE.DodecahedronGeometry(armThickness * 1.3, 0), materials.secondary);
     rightArmUpper.add(rDeltoid);
 
-    // Upper Arm / Bicep
-    const rUpperGeo = new THREE.CylinderGeometry(0.11, 0.09, armUpperL, 6);
-    const rUpperMesh = new THREE.Mesh(rUpperGeo, materials.secondary);
+    // Right Bicep
+    const rUpperMesh = new THREE.Mesh(new THREE.CylinderGeometry(armThickness, armThickness * 0.85, armUpperL, 6), materials.secondary);
     rUpperMesh.position.y = -armUpperL / 2;
     rUpperMesh.castShadow = true;
     rightArmUpper.add(rUpperMesh);
@@ -431,34 +513,32 @@ export class LowPolyHuman {
     rightArmLower.position.y = -armUpperL;
     rightArmUpper.add(rightArmLower);
 
-    // Elbow joint cap
-    const rElbowGeo = new THREE.DodecahedronGeometry(0.09, 0);
-    const rElbow = new THREE.Mesh(rElbowGeo, materials.secondary);
-    rElbow.position.set(0, 0, -0.04);
+    // Right Elbow cap
+    const rElbow = new THREE.Mesh(new THREE.DodecahedronGeometry(armThickness * 0.9, 0), materials.secondary);
+    rElbow.position.set(0, 0, -0.03);
     rightArmLower.add(rElbow);
 
-    // Forearm
-    const rLowerGeo = new THREE.CylinderGeometry(0.095, 0.075, armLowerL, 6);
-    const rLowerMesh = new THREE.Mesh(rLowerGeo, materials.skin);
+    // Right Forearm
+    const rLowerMesh = new THREE.Mesh(new THREE.CylinderGeometry(armThickness * 0.85, armThickness * 0.7, armLowerL, 6), materials.skin);
     rLowerMesh.position.y = -armLowerL / 2;
     rLowerMesh.castShadow = true;
     rightArmLower.add(rLowerMesh);
 
     // Detailed Right Hand
-    const rHand = this._createDetailedHand(materials.skin, false);
+    const rHand = this._createDetailedHand(materials.skin, false, isWomen);
     rHand.position.y = -armLowerL;
     rightArmLower.add(rHand);
 
-    // Optional Handheld Accessories (Coffee cup or Smartphone)
-    if (!isPlayer && Math.random() > 0.6) {
+    // Handheld item for random pedestrians
+    if (!isPlayer && Math.random() > 0.65) {
       if (Math.random() > 0.5) {
         const cup = this._createCoffeeCup(materials);
-        cup.position.set(0, -0.16, 0.1);
+        cup.position.set(0, -0.15, 0.08);
         cup.rotation.x = 0.2;
         rightArmLower.add(cup);
       } else {
         const phone = this._createPhone(materials);
-        phone.position.set(0, -0.13, 0.1);
+        phone.position.set(0, -0.12, 0.08);
         phone.rotation.x = 0.35;
         rightArmLower.add(phone);
       }
@@ -467,90 +547,84 @@ export class LowPolyHuman {
     // ==========================================
     // 5. LEGS, KNEES & REALISTIC SNEAKERS
     // ==========================================
-    const legUpperL = 0.65;
-    const legLowerL = 0.65;
+    const legUpperL = isWomen ? 0.62 : 0.65;
+    const legLowerL = isWomen ? 0.62 : 0.65;
+    const legSpacing = isWomen ? 0.16 : 0.19;
+    const legThickness = isWomen ? 0.12 : 0.15;
 
     // LEFT LEG
     const leftLegUpper = new THREE.Group();
-    leftLegUpper.position.set(0.19, -0.14, 0);
+    leftLegUpper.position.set(legSpacing, -0.14, 0);
     hips.add(leftLegUpper);
 
     // Thigh with Quadricep contour
-    const lThighGeo = new THREE.CylinderGeometry(0.15, 0.12, legUpperL, 6);
-    const lThigh = new THREE.Mesh(lThighGeo, materials.pants);
+    const lThigh = new THREE.Mesh(new THREE.CylinderGeometry(legThickness, legThickness * 0.8, legUpperL, 6), materials.pants);
     lThigh.position.y = -legUpperL / 2;
     lThigh.castShadow = true;
     leftLegUpper.add(lThigh);
 
-    // Left Shin & Knee
+    // Left Shin Pivot (Knee joint)
     const leftLegLower = new THREE.Group();
     leftLegLower.position.y = -legUpperL;
     leftLegUpper.add(leftLegLower);
 
-    // Patella Kneecap (adds authentic articulation)
-    const lKneeGeo = new THREE.BoxGeometry(0.13, 0.11, 0.06);
-    const lKnee = new THREE.Mesh(lKneeGeo, materials.pants);
-    lKnee.position.set(0, 0, 0.11);
+    // Patella Kneecap
+    const lKnee = new THREE.Mesh(new THREE.BoxGeometry(legThickness * 0.9, 0.10, 0.06), materials.pants);
+    lKnee.position.set(0, 0, legThickness * 0.7);
     leftLegLower.add(lKnee);
 
-    // Calf muscle & Shin
-    const lShinGeo = new THREE.CylinderGeometry(0.12, 0.09, legLowerL, 6);
-    const lShin = new THREE.Mesh(lShinGeo, materials.pants);
+    // Shin & Calf
+    const lShin = new THREE.Mesh(new THREE.CylinderGeometry(legThickness * 0.8, legThickness * 0.65, legLowerL, 6), materials.pants);
     lShin.position.y = -legLowerL / 2;
     lShin.castShadow = true;
     leftLegLower.add(lShin);
 
-    // Cuffed pants hemline
-    const lCuffGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.06, 6);
-    const lCuff = new THREE.Mesh(lCuffGeo, materials.pants);
+    // Pants cuff
+    const lCuff = new THREE.Mesh(new THREE.CylinderGeometry(legThickness * 0.72, legThickness * 0.72, 0.06, 6), materials.pants);
     lCuff.position.y = -legLowerL + 0.03;
     leftLegLower.add(lCuff);
 
-    // Left Realistic Sneaker
-    const lSneaker = this._createRealisticSneaker(materials);
-    lSneaker.position.set(0, -legLowerL, 0.08);
-    leftLegLower.add(lSneaker);
+    // Left Footwear
+    const lFootwear = this._createRealisticSneaker(materials, isWomen);
+    lFootwear.position.set(0, -legLowerL, 0.08);
+    leftLegLower.add(lFootwear);
 
     // RIGHT LEG
     const rightLegUpper = new THREE.Group();
-    rightLegUpper.position.set(-0.19, -0.14, 0);
+    rightLegUpper.position.set(-legSpacing, -0.14, 0);
     hips.add(rightLegUpper);
 
-    // Thigh with Quadricep contour
-    const rThighGeo = new THREE.CylinderGeometry(0.15, 0.12, legUpperL, 6);
-    const rThigh = new THREE.Mesh(rThighGeo, materials.pants);
+    // Right Thigh
+    const rThigh = new THREE.Mesh(new THREE.CylinderGeometry(legThickness, legThickness * 0.8, legUpperL, 6), materials.pants);
     rThigh.position.y = -legUpperL / 2;
     rThigh.castShadow = true;
     rightLegUpper.add(rThigh);
 
-    // Right Shin & Knee
+    // Right Shin Pivot (Knee joint)
     const rightLegLower = new THREE.Group();
     rightLegLower.position.y = -legUpperL;
     rightLegUpper.add(rightLegLower);
 
     // Patella Kneecap
-    const rKneeGeo = new THREE.BoxGeometry(0.13, 0.11, 0.06);
-    const rKnee = new THREE.Mesh(rKneeGeo, materials.pants);
-    rKnee.position.set(0, 0, 0.11);
+    const rKnee = new THREE.Mesh(new THREE.BoxGeometry(legThickness * 0.9, 0.10, 0.06), materials.pants);
+    rKnee.position.set(0, 0, legThickness * 0.7);
     rightLegLower.add(rKnee);
 
-    // Calf muscle & Shin
-    const rShinGeo = new THREE.CylinderGeometry(0.12, 0.09, legLowerL, 6);
-    const rShin = new THREE.Mesh(rShinGeo, materials.pants);
+    // Shin & Calf
+    const rShin = new THREE.Mesh(new THREE.CylinderGeometry(legThickness * 0.8, legThickness * 0.65, legLowerL, 6), materials.pants);
     rShin.position.y = -legLowerL / 2;
     rShin.castShadow = true;
     rightLegLower.add(rShin);
 
-    // Cuffed pants hemline
-    const rCuffGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.06, 6);
-    const rCuff = new THREE.Mesh(rCuffGeo, materials.pants);
+    // Pants cuff
+    const rCuff = new THREE.Mesh(new THREE.CylinderGeometry(legThickness * 0.72, legThickness * 0.72, 0.06, 6), materials.pants);
     rCuff.position.y = -legLowerL + 0.03;
     rightLegLower.add(rCuff);
 
-    // Right Realistic Sneaker
-    const rSneaker = this._createRealisticSneaker(materials);
-    rSneaker.position.set(0, -legLowerL, 0.08);
-    rightLegLower.add(rSneaker);
+    // Right Footwear
+    const rFootwear = this._createRealisticSneaker(materials, isWomen);
+    rFootwear.position.set(0, -legLowerL, 0.08);
+    rightLegLower.add(rFootwear);
 
     // ==========================================
     // 6. SKELETAL RIG INTERFACE
@@ -567,7 +641,12 @@ export class LowPolyHuman {
       leftLegUpper,
       leftLegLower,
       rightLegUpper,
-      rightLegLower
+      rightLegLower,
+      gender,
+      isWomen,
+      style,
+      hairstyle,
+      materials
     };
 
     root.userData.rig = rig;
@@ -577,65 +656,53 @@ export class LowPolyHuman {
   /**
    * Anatomical Hand with Palm, Opposable Thumb, and 4 Curled Fingers
    */
-  static _createDetailedHand(skinMat, isLeft) {
+  static _createDetailedHand(skinMat, isLeft, isWomen = false) {
     const hand = new THREE.Group();
+    const handScale = isWomen ? 0.85 : 1.0;
 
     // Sculpted Palm
-    const palmGeo = new THREE.BoxGeometry(0.13, 0.12, 0.06);
-    const palm = new THREE.Mesh(palmGeo, skinMat);
-    palm.position.y = -0.06;
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.12 * handScale, 0.11 * handScale, 0.05 * handScale), skinMat);
+    palm.position.y = -0.05 * handScale;
     palm.castShadow = true;
     hand.add(palm);
 
-    // Thenar Eminence (fleshy muscle at thumb base)
-    const thenarGeo = new THREE.BoxGeometry(0.06, 0.07, 0.05);
-    const thenar = new THREE.Mesh(thenarGeo, skinMat);
-    thenar.position.set(isLeft ? -0.05 : 0.05, -0.05, 0.02);
-    hand.add(thenar);
-
-    // Opposable Thumb (2 phalanges)
+    // Opposable Thumb
     const thumbGroup = new THREE.Group();
-    thumbGroup.position.set(isLeft ? -0.07 : 0.07, -0.05, 0.02);
-    thumbGroup.rotation.z = isLeft ? 0.35 : -0.35;
+    thumbGroup.position.set((isLeft ? -0.06 : 0.06) * handScale, -0.04 * handScale, 0.02 * handScale);
+    thumbGroup.rotation.z = (isLeft ? 0.35 : -0.35);
     thumbGroup.rotation.x = 0.25;
 
-    const thumbProxGeo = new THREE.BoxGeometry(0.045, 0.055, 0.045);
-    const thumbProx = new THREE.Mesh(thumbProxGeo, skinMat);
-    thumbProx.position.y = -0.025;
+    const thumbProx = new THREE.Mesh(new THREE.BoxGeometry(0.04 * handScale, 0.05 * handScale, 0.04 * handScale), skinMat);
+    thumbProx.position.y = -0.02 * handScale;
     thumbGroup.add(thumbProx);
 
-    const thumbDistGeo = new THREE.BoxGeometry(0.04, 0.045, 0.04);
-    const thumbDist = new THREE.Mesh(thumbDistGeo, skinMat);
-    thumbDist.position.set(0, -0.06, 0.01);
+    const thumbDist = new THREE.Mesh(new THREE.BoxGeometry(0.035 * handScale, 0.04 * handScale, 0.035 * handScale), skinMat);
+    thumbDist.position.set(0, -0.05 * handScale, 0.01 * handScale);
     thumbDist.rotation.x = 0.2;
     thumbGroup.add(thumbDist);
 
     hand.add(thumbGroup);
 
-    // 4 Articulated Fingers (Index, Middle, Ring, Pinky) with natural relaxed curl
+    // 4 Articulated Fingers
     const fingerConfigs = [
-      { name: 'index',  x: isLeft ? -0.042 : 0.042, length: 0.08, width: 0.028 },
-      { name: 'middle', x: isLeft ? -0.014 : 0.014, length: 0.09, width: 0.029 },
-      { name: 'ring',   x: isLeft ? 0.014 : -0.014, length: 0.082, width: 0.027 },
-      { name: 'pinky',  x: isLeft ? 0.042 : -0.042, length: 0.065, width: 0.025 }
+      { x: (isLeft ? -0.038 : 0.038) * handScale, length: 0.075 * handScale, width: 0.026 * handScale },
+      { x: (isLeft ? -0.012 : 0.012) * handScale, length: 0.085 * handScale, width: 0.027 * handScale },
+      { x: (isLeft ? 0.012 : -0.012) * handScale, length: 0.078 * handScale, width: 0.025 * handScale },
+      { x: (isLeft ? 0.038 : -0.038) * handScale, length: 0.060 * handScale, width: 0.023 * handScale }
     ];
 
     fingerConfigs.forEach(cfg => {
       const finger = new THREE.Group();
-      finger.position.set(cfg.x, -0.12, 0);
+      finger.position.set(cfg.x, -0.10 * handScale, 0);
 
-      // Proximal phalanx (knuckle to mid-finger)
-      const proxGeo = new THREE.BoxGeometry(cfg.width, cfg.length * 0.55, 0.035);
-      const prox = new THREE.Mesh(proxGeo, skinMat);
+      const prox = new THREE.Mesh(new THREE.BoxGeometry(cfg.width, cfg.length * 0.55, 0.03 * handScale), skinMat);
       prox.position.y = -(cfg.length * 0.55) / 2;
-      prox.rotation.x = 0.15; // Natural relaxed bend
+      prox.rotation.x = 0.15;
       finger.add(prox);
 
-      // Distal phalanx (fingertip)
-      const distGeo = new THREE.BoxGeometry(cfg.width * 0.9, cfg.length * 0.45, 0.03);
-      const dist = new THREE.Mesh(distGeo, skinMat);
-      dist.position.set(0, -(cfg.length * 0.55) - (cfg.length * 0.45) / 2, 0.01);
-      dist.rotation.x = 0.35; // Curled fingertip
+      const dist = new THREE.Mesh(new THREE.BoxGeometry(cfg.width * 0.9, cfg.length * 0.45, 0.025 * handScale), skinMat);
+      dist.position.set(0, -(cfg.length * 0.55) - (cfg.length * 0.45) / 2, 0.01 * handScale);
+      dist.rotation.x = 0.35;
       finger.add(dist);
 
       hand.add(finger);
@@ -645,381 +712,330 @@ export class LowPolyHuman {
   }
 
   /**
-   * Realistic Modern Sneaker with Curved Ergonomic Sole, Laces, and Tongue
+   * Realistic Modern Sneaker / Footwear with Cushioned Midsole, Sole & Laces
    */
-  static _createRealisticSneaker(mats) {
+  static _createRealisticSneaker(mats, isWomen = false) {
     const sneaker = new THREE.Group();
+    const w = isWomen ? 0.20 : 0.24;
+    const l = isWomen ? 0.42 : 0.48;
 
     // Outsole (Tread base)
-    const outsoleGeo = new THREE.BoxGeometry(0.24, 0.03, 0.48);
-    const outsole = new THREE.Mesh(outsoleGeo, mats.soleDark);
+    const outsole = new THREE.Mesh(new THREE.BoxGeometry(w, 0.03, l), mats.soleDark);
     outsole.position.y = -0.075;
     outsole.castShadow = true;
     sneaker.add(outsole);
 
-    // Thick Cushioned Midsole (White rubber wedge, slightly higher at heel)
-    const midsoleGeo = new THREE.BoxGeometry(0.25, 0.07, 0.47);
-    const midsole = new THREE.Mesh(midsoleGeo, mats.soleWhite);
+    // Thick Cushioned Midsole
+    const midsole = new THREE.Mesh(new THREE.BoxGeometry(w * 1.04, 0.07, l * 0.98), mats.soleWhite);
     midsole.position.set(0, -0.03, 0.01);
-    midsole.rotation.x = 0.04; // Gentle ergonomic slope
+    midsole.rotation.x = 0.04;
     midsole.castShadow = true;
     sneaker.add(midsole);
 
-    // Shoe Upper (Leather / Canvas body)
-    const upperGeo = new THREE.BoxGeometry(0.23, 0.14, 0.44);
-    const upper = new THREE.Mesh(upperGeo, mats.shoeUpper);
-    upper.position.set(0, 0.06, 0.02);
+    // Shoe Upper
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(w * 0.96, 0.13, l * 0.92), mats.shoeUpper);
+    upper.position.set(0, 0.05, 0.02);
     upper.castShadow = true;
     sneaker.add(upper);
 
-    // Protective Front Toe Cap
-    const toeCapGeo = new THREE.BoxGeometry(0.23, 0.09, 0.16);
-    const toeCap = new THREE.Mesh(toeCapGeo, mats.soleWhite);
-    toeCap.position.set(0, 0.04, 0.16);
+    // Toe Cap
+    const toeCap = new THREE.Mesh(new THREE.BoxGeometry(w * 0.96, 0.08, 0.14), mats.soleWhite);
+    toeCap.position.set(0, 0.035, l * 0.33);
     sneaker.add(toeCap);
 
-    // Cushioned Shoe Tongue
-    const tongueGeo = new THREE.BoxGeometry(0.14, 0.12, 0.14);
-    const tongue = new THREE.Mesh(tongueGeo, mats.primary);
-    tongue.position.set(0, 0.12, 0.06);
+    // Shoe Tongue
+    const tongue = new THREE.Mesh(new THREE.BoxGeometry(w * 0.58, 0.11, 0.12), mats.primary);
+    tongue.position.set(0, 0.11, 0.05);
     tongue.rotation.x = 0.28;
     sneaker.add(tongue);
 
-    // Criss-Cross Sneaker Laces
+    // Laces
     [-0.04, 0.02, 0.08].forEach(z => {
-      const laceBarGeo = new THREE.BoxGeometry(0.12, 0.02, 0.03);
-      const laceBar = new THREE.Mesh(laceBarGeo, mats.shoeLaces);
-      laceBar.position.set(0, 0.125, z);
+      const laceBar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.5, 0.02, 0.03), mats.shoeLaces);
+      laceBar.position.set(0, 0.115, z);
       sneaker.add(laceBar);
     });
-
-    // Heel Collar & Pull Tab
-    const tabGeo = new THREE.BoxGeometry(0.04, 0.06, 0.02);
-    const tab = new THREE.Mesh(tabGeo, mats.soleWhite);
-    tab.position.set(0, 0.13, -0.19);
-    sneaker.add(tab);
 
     return sneaker;
   }
 
   /**
-   * Traditional Hadejia Headwear, Embroidered Hula Caps & Turbans
+   * Modular 3D Hairstyles & Headwear for Men and Women
    */
-  static _addHairstyle(headPivot, mats, isPlayer, style) {
-    if (isPlayer) {
-      // Dashing Embroidered Hausa Cap (Hula Zanna Bukar) with crisp hair fade
-      const napeHairGeo = new THREE.BoxGeometry(0.48, 0.16, 0.26);
-      const napeHair = new THREE.Mesh(napeHairGeo, mats.hair);
-      napeHair.position.set(0, 0.44, -0.18);
+  static _addHairstyle(headPivot, mats, isPlayer, style, gender, hairstyle) {
+    const isWomen = (gender === 'women');
+
+    // ----------------------------------------------------
+    // WOMEN'S MODULAR HAIRSTYLES
+    // ----------------------------------------------------
+    if (isWomen) {
+      if (hairstyle === 'hijab_mayafi' || style === 'hausa_atampa') {
+        // Elegant Hausa/Fulani Mayafi Veil (Flowing head scarf)
+        const veilCrown = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.28, 0.30, 0.26, 10),
+          new THREE.MeshStandardMaterial({ color: mats.primary.color, roughness: 0.75, flatShading: true })
+        );
+        veilCrown.position.y = 0.58;
+        headPivot.add(veilCrown);
+
+        // Graceful flowing side drapes over shoulders
+        [-0.26, 0.26].forEach((x, idx) => {
+          const drape = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.50, 0.22),
+            new THREE.MeshStandardMaterial({ color: mats.primary.color, roughness: 0.75, flatShading: true })
+          );
+          drape.position.set(x, 0.34, 0.02);
+          drape.rotation.z = idx === 0 ? 0.12 : -0.12;
+          headPivot.add(drape);
+        });
+
+        // Back drape
+        const backDrape = new THREE.Mesh(
+          new THREE.BoxGeometry(0.46, 0.46, 0.08),
+          new THREE.MeshStandardMaterial({ color: mats.primary.color, roughness: 0.75, flatShading: true })
+        );
+        backDrape.position.set(0, 0.36, -0.23);
+        headPivot.add(backDrape);
+        return;
+      }
+
+      if (hairstyle === 'ponytail') {
+        // High Anime Ponytail with Scrunchie
+        const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 1), mats.hair);
+        crown.position.set(0, 0.56, 0);
+        headPivot.add(crown);
+
+        // Front side bangs
+        [-0.18, 0.18].forEach(x => {
+          const bang = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.24, 0.08), mats.hair);
+          bang.position.set(x, 0.44, 0.16);
+          headPivot.add(bang);
+        });
+
+        // Hair scrunchie band
+        const scrunchie = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.022, 6, 12), mats.secondary);
+        scrunchie.position.set(0, 0.64, -0.22);
+        scrunchie.rotation.x = 0.5;
+        headPivot.add(scrunchie);
+
+        // Ponytail tail cascading back
+        const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.03, 0.42, 8), mats.hair);
+        tail.position.set(0, 0.52, -0.32);
+        tail.rotation.x = 0.55;
+        headPivot.add(tail);
+        return;
+      }
+
+      if (hairstyle === 'twin_braids') {
+        // Twin Braids
+        const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 1), mats.hair);
+        crown.position.set(0, 0.56, 0);
+        headPivot.add(crown);
+
+        [-0.20, 0.20].forEach(x => {
+          const braid = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.025, 0.46, 6), mats.hair);
+          braid.position.set(x, 0.32, 0.10);
+          headPivot.add(braid);
+        });
+        return;
+      }
+
+      if (hairstyle === 'chic_bob') {
+        // Chic Modern Bob Cut
+        const bob = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.31, 0.32, 8), mats.hair);
+        bob.position.y = 0.54;
+        headPivot.add(bob);
+
+        const fringe = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.10, 0.10), mats.hair);
+        fringe.position.set(0, 0.52, 0.20);
+        headPivot.add(fringe);
+        return;
+      }
+
+      // Default Women: Long Flowing Hair
+      const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 1), mats.hair);
+      crown.position.set(0, 0.56, 0);
+      headPivot.add(crown);
+
+      const flowingBack = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.54, 0.10), mats.hair);
+      flowingBack.position.set(0, 0.32, -0.20);
+      headPivot.add(flowingBack);
+      return;
+    }
+
+    // ----------------------------------------------------
+    // MEN'S MODULAR HAIRSTYLES
+    // ----------------------------------------------------
+    if (hairstyle === 'hula_zanna' || isPlayer) {
+      // Dashing Embroidered Hausa Cap (Hula Zanna Bukar) with hair fade
+      const napeHair = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.15, 0.25), mats.hair);
+      napeHair.position.set(0, 0.42, -0.17);
       headPivot.add(napeHair);
 
-      const sideHairGeo = new THREE.BoxGeometry(0.52, 0.14, 0.3);
-      const sideHair = new THREE.Mesh(sideHairGeo, mats.hair);
-      sideHair.position.set(0, 0.47, 0.02);
+      const sideHair = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.13, 0.28), mats.hair);
+      sideHair.position.set(0, 0.45, 0.02);
       headPivot.add(sideHair);
 
-      // Embroidered Cylindrical Hula Cap
-      const hulaGeo = new THREE.CylinderGeometry(0.27, 0.29, 0.22, 10);
-      hulaGeo.rotateY(Math.PI / 10);
-      const hulaMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.6, flatShading: true });
-      const hula = new THREE.Mesh(hulaGeo, hulaMat);
-      hula.position.y = 0.64;
+      // Cylindrical Hula Cap
+      const hula = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.29, 0.22, 10), new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.6, flatShading: true }));
+      hula.rotateY(Math.PI / 10);
+      hula.position.y = 0.62;
       hula.castShadow = true;
       headPivot.add(hula);
 
       // Gold embroidery band
-      const bandGeo = new THREE.CylinderGeometry(0.28, 0.295, 0.06, 10);
-      bandGeo.rotateY(Math.PI / 10);
-      const band = new THREE.Mesh(bandGeo, mats.buckleGold);
-      band.position.y = 0.58;
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.295, 0.06, 10), mats.buckleGold);
+      band.rotateY(Math.PI / 10);
+      band.position.y = 0.56;
       headPivot.add(band);
 
-      // Traditional top crown indentation
-      const creaseGeo = new THREE.BoxGeometry(0.22, 0.04, 0.14);
-      const crease = new THREE.Mesh(creaseGeo, mats.secondary);
-      crease.position.y = 0.74;
+      // Crown crease
+      const crease = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.14), mats.secondary);
+      crease.position.y = 0.72;
       headPivot.add(crease);
       return;
     }
 
-    if (style === 'emir_guard') {
-      // Royal Dogari Palace Guard Turban (Rawani) with tall cockade
-      const turbanBaseGeo = new THREE.CylinderGeometry(0.32, 0.3, 0.24, 10);
-      turbanBaseGeo.rotateY(Math.PI / 10);
-      const turbanMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.8, flatShading: true });
-      const turban = new THREE.Mesh(turbanBaseGeo, turbanMat);
-      turban.position.y = 0.64;
+    if (hairstyle === 'rawani_turban' || style === 'emir_guard') {
+      // Royal Dogari Palace Guard / Scholar Turban
+      const turban = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.3, 0.24, 10), new THREE.MeshStandardMaterial({ color: style === 'emir_guard' ? 0xdc2626 : 0xf8fafc, roughness: 0.8, flatShading: true }));
+      turban.rotateY(Math.PI / 10);
+      turban.position.y = 0.62;
       headPivot.add(turban);
 
-      // Royal green cockade / crest
-      const cockadeGeo = new THREE.BoxGeometry(0.1, 0.22, 0.08);
-      const cockadeMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7, flatShading: true });
-      const cockade = new THREE.Mesh(cockadeGeo, cockadeMat);
-      cockade.position.set(0, 0.8, 0.22);
-      headPivot.add(cockade);
-
-      // Ear flaps
-      [-0.26, 0.26].forEach(x => {
-        const flapGeo = new THREE.BoxGeometry(0.08, 0.24, 0.12);
-        const flap = new THREE.Mesh(flapGeo, turbanMat);
-        flap.position.set(x, 0.46, 0);
-        headPivot.add(flap);
-      });
+      if (style === 'emir_guard') {
+        const cockade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.08), new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7, flatShading: true }));
+        cockade.position.set(0, 0.78, 0.22);
+        headPivot.add(cockade);
+      }
       return;
     }
 
-    if (style === 'hausa_atampa') {
-      // Elegant Hausa/Fulani Mayafi Veil (Flowing head scarf)
-      const veilCrownGeo = new THREE.CylinderGeometry(0.3, 0.32, 0.28, 10);
-      const veilMat = new THREE.MeshStandardMaterial({ color: mats.primary.color, roughness: 0.75, flatShading: true });
-      const veilCrown = new THREE.Mesh(veilCrownGeo, veilMat);
-      veilCrown.position.y = 0.62;
-      headPivot.add(veilCrown);
-
-      // Graceful flowing side drapes over shoulders
-      [-0.28, 0.28].forEach((x, idx) => {
-        const drapeGeo = new THREE.BoxGeometry(0.08, 0.52, 0.24);
-        const drape = new THREE.Mesh(drapeGeo, veilMat);
-        drape.position.set(x, 0.36, 0.02);
-        drape.rotation.z = idx === 0 ? 0.12 : -0.12;
-        headPivot.add(drape);
-      });
-
-      // Back drape
-      const backDrapeGeo = new THREE.BoxGeometry(0.5, 0.48, 0.08);
-      const backDrape = new THREE.Mesh(backDrapeGeo, veilMat);
-      backDrape.position.set(0, 0.38, -0.25);
-      headPivot.add(backDrape);
-      return;
-    }
-
-    if (style === 'wetland_fisherman') {
-      // Traditional Conical Fulani / Fisherman Straw Hat (Malfa)
-      const brimGeo = new THREE.ConeGeometry(0.52, 0.18, 12);
-      const strawMat = new THREE.MeshStandardMaterial({ color: 0xd4a373, roughness: 0.9, flatShading: true });
-      const malfa = new THREE.Mesh(brimGeo, strawMat);
-      malfa.position.y = 0.68;
-      headPivot.add(malfa);
-
-      // Leather peak cap
-      const peakGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.08, 8);
-      const peakMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.6, flatShading: true });
-      const peak = new THREE.Mesh(peakGeo, peakMat);
-      peak.position.y = 0.8;
-      headPivot.add(peak);
-
-      // Under-hair peek
-      const hairPeekGeo = new THREE.BoxGeometry(0.5, 0.12, 0.48);
-      const hairPeek = new THREE.Mesh(hairPeekGeo, mats.hair);
-      hairPeek.position.set(0, 0.52, 0);
-      headPivot.add(hairPeek);
-      return;
-    }
-
-    // Varied Headwear for other citizens:
-    const type = Math.floor(Math.random() * 4);
-
-    if (type === 0) {
-      // Iconic Embroidered Hula Cap (Zanna Bukar)
-      const hulaGeo = new THREE.CylinderGeometry(0.27, 0.29, 0.24, 10);
-      hulaGeo.rotateY(Math.PI / 10);
-      const hula = new THREE.Mesh(hulaGeo, mats.secondary);
-      hula.position.y = 0.65;
-      hula.castShadow = true;
-      headPivot.add(hula);
-
-      // Needlework embroidery stripe
-      const bandGeo = new THREE.CylinderGeometry(0.28, 0.295, 0.07, 10);
-      bandGeo.rotateY(Math.PI / 10);
-      const band = new THREE.Mesh(bandGeo, mats.buckleGold);
-      band.position.y = 0.58;
-      headPivot.add(band);
-
-      // Soft sideburns
-      [-0.26, 0.26].forEach(x => {
-        const side = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.1), mats.hair);
-        side.position.set(x, 0.46, 0.06);
-        headPivot.add(side);
-      });
-
-    } else if (type === 1) {
-      // Royal Rawani Turban (Worn by elders & scholars)
-      const turbanBaseGeo = new THREE.CylinderGeometry(0.32, 0.3, 0.24, 10);
-      const turbanMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.85, flatShading: true });
-      const turban = new THREE.Mesh(turbanBaseGeo, turbanMat);
-      turban.position.y = 0.64;
-      headPivot.add(turban);
-
-      // Draped end over shoulder
-      const drapeGeo = new THREE.BoxGeometry(0.12, 0.44, 0.08);
-      const drape = new THREE.Mesh(drapeGeo, turbanMat);
-      drape.position.set(-0.25, 0.38, -0.15);
-      headPivot.add(drape);
-
-    } else if (type === 2) {
-      // Embroidered Velvet Hula (Tangaran)
-      const hulaGeo = new THREE.CylinderGeometry(0.26, 0.28, 0.2, 10);
-      const hulaMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.6, flatShading: true });
-      const hula = new THREE.Mesh(hulaGeo, hulaMat);
-      hula.position.y = 0.63;
-      headPivot.add(hula);
-
-      const trimGeo = new THREE.CylinderGeometry(0.27, 0.285, 0.04, 10);
-      const trim = new THREE.Mesh(trimGeo, mats.shirtCollar);
-      trim.position.y = 0.56;
-      headPivot.add(trim);
-
-    } else {
-      // Textured Curly Afro / Clean Fade
-      const curlyGeo = new THREE.DodecahedronGeometry(0.32, 1);
-      const curly = new THREE.Mesh(curlyGeo, mats.hair);
-      curly.position.set(0, 0.63, 0);
+    if (hairstyle === 'afro') {
+      // Textured Curly Afro
+      const curly = new THREE.Mesh(new THREE.DodecahedronGeometry(0.32, 1), mats.hair);
+      curly.position.set(0, 0.61, 0);
       headPivot.add(curly);
-
-      [-0.25, 0.25].forEach(x => {
-        const side = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.1), mats.hair);
-        side.position.set(x, 0.46, 0.08);
-        headPivot.add(side);
-      });
+      return;
     }
+
+    // Default Men: Clean Fade / Buzz cut
+    const fadeTop = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 0), mats.hair);
+    fadeTop.position.set(0, 0.58, 0);
+    headPivot.add(fadeTop);
+
+    [-0.24, 0.24].forEach(x => {
+      const side = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.1), mats.hair);
+      side.position.set(x, 0.44, 0.06);
+      headPivot.add(side);
+    });
   }
 
   static _createCoffeeCup(mats) {
     const cupGroup = new THREE.Group();
-    const bodyGeo = new THREE.CylinderGeometry(0.08, 0.06, 0.22, 6);
-    const body = new THREE.Mesh(bodyGeo, mats.coffeeCup);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.22, 6), mats.coffeeCup);
     cupGroup.add(body);
-
-    const sleeveGeo = new THREE.CylinderGeometry(0.082, 0.072, 0.09, 6);
-    const sleeve = new THREE.Mesh(sleeveGeo, mats.backpack);
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.072, 0.09, 6), mats.backpack);
     sleeve.position.y = 0.01;
     cupGroup.add(sleeve);
-
-    const lidGeo = new THREE.CylinderGeometry(0.085, 0.085, 0.04, 6);
-    const lid = new THREE.Mesh(lidGeo, mats.coffeeLid);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.04, 6), mats.coffeeLid);
     lid.position.y = 0.12;
     cupGroup.add(lid);
-
     return cupGroup;
   }
 
   static _createPhone(mats) {
     const phone = new THREE.Group();
-    const caseGeo = new THREE.BoxGeometry(0.12, 0.22, 0.02);
-    const phoneCase = new THREE.Mesh(caseGeo, mats.phoneCase);
+    const phoneCase = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.02), mats.phoneCase);
     phone.add(phoneCase);
-
-    const screenGeo = new THREE.BoxGeometry(0.1, 0.19, 0.005);
-    const screen = new THREE.Mesh(screenGeo, mats.watchStrap);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.19, 0.005), mats.watchStrap);
     screen.position.z = 0.011;
     phone.add(screen);
-
     return phone;
   }
 
-  static _pickRandomStyle() {
-    const styles = [
-      'hausa_babban_riga',
-      'hausa_kaftan',
-      'hausa_atampa',
-      'emir_guard',
-      'wetland_fisherman',
-      'traditional_scholar'
-    ];
+  static getRandomMenStyle() {
+    const styles = ['harpy_urban', 'hausa_kaftan', 'hausa_babban_riga', 'emir_guard'];
     return styles[Math.floor(Math.random() * styles.length)];
   }
 
+  static getRandomWomenStyle() {
+    const styles = ['xixi_urban', 'hausa_atampa', 'modest_abaya'];
+    return styles[Math.floor(Math.random() * styles.length)];
+  }
+
+  static getRandomMenHairstyle() {
+    const list = ['hula_zanna', 'fade', 'rawani_turban', 'afro'];
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  static getRandomWomenHairstyle() {
+    const list = ['hijab_mayafi', 'ponytail', 'twin_braids', 'chic_bob'];
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
   /**
-   * Signature Player Palette (Regal Northern Nigerian Attire)
+   * Signature Player Palette (Men / Women)
    */
-  static getPlayerPalette() {
+  static getPlayerPalette(gender = 'men') {
+    if (gender === 'women') {
+      return {
+        skinColor: 0xbe8b62, // Warm amber caramel skin tone
+        lipColor: 0xc2415d,  // Rose berry lip tone
+        eyeColor: 0x382212,  // Rich dark brown
+        hairColor: 0x151515, // Jet black
+        shirtColor: 0x0d9488,// Teal Atampa / chic blouse
+        jacketColor: 0xf43f5e,// Coral rose embroidery / sash
+        pantsColor: 0x0f766e, // Teal trousers / wrapper
+        shoesColor: 0xf1f5f9  // White chic sneakers
+      };
+    }
+
     return {
-      skinColor: 0x9e683f, // Rich warm caramel Northern Nigerian skin tone
+      skinColor: 0x9e683f, // Rich warm caramel skin tone
       lipColor: 0x7b3e34,  // Deep natural rose
       eyeColor: 0x382212,  // Rich dark brown
       hairColor: 0x151515, // Jet black
-      shirtColor: 0x0284c7,// Royal azure blue Kaftan / Babban Riga
-      jacketColor: 0xf59e0b,// Golden needlework embroidery
-      pantsColor: 0x0369a1, // Matching azure blue trousers
-      shoesColor: 0x78350f  // Handcrafted Northern Nigerian leather sandals
+      shirtColor: 0x0284c7,// Royal azure blue Kaftan / bomber jacket
+      jacketColor: 0xf59e0b,// Golden silk embroidery
+      pantsColor: 0x0369a1, // Azure blue denim trousers
+      shoesColor: 0x78350f  // Handcrafted leather shoes
     };
   }
 
   /**
-   * Diverse, authentic Northern Nigerian palettes for Hadejia citizens
+   * Diverse authentic palettes for Hadejia citizens
    */
-  static getRandomPalette() {
-    // Rich Hausa, Fulani & Kanuri skin tones
+  static getRandomPalette(gender = 'men') {
     const skinProfiles = [
-      { skin: 0xbe8b62, lips: 0x934f46 }, // Golden warm amber
-      { skin: 0xa26a42, lips: 0x7e3f36 }, // Rich caramel
-      { skin: 0x8a5530, lips: 0x66332a }, // Warm bronze
-      { skin: 0x734324, lips: 0x542921 }, // Deep bronze
-      { skin: 0x58341a, lips: 0x401f18 }, // Rich dark cocoa / espresso
-      { skin: 0x3e2313, lips: 0x2e1610 }, // Deep mahogany
-      { skin: 0xcc976c, lips: 0x9e5c54 }  // Sun-warmed golden tan
+      { skin: 0xbe8b62, lips: 0x934f46 },
+      { skin: 0xa26a42, lips: 0x7e3f36 },
+      { skin: 0x8a5530, lips: 0x66332a },
+      { skin: 0x734324, lips: 0x542921 },
+      { skin: 0x58341a, lips: 0x401f18 },
+      { skin: 0x3e2313, lips: 0x2e1610 },
+      { skin: 0xcc976c, lips: 0x9e5c54 }
     ];
 
-    // Dark brown eyes typical of West Africa
-    const eyeColors = [
-      0x2c180e, // Rich dark brown
-      0x382212, // Deep espresso
-      0x4a2e19, // Warm chocolate
-      0x593a1d  // Amber brown
-    ];
+    const eyeColors = [0x2c180e, 0x382212, 0x4a2e19, 0x593a1d];
+    const hairColors = [0x151515, 0x241711, 0x2f1e16];
 
-    // Hair colors
-    const hairColors = [
-      0x151515, // Jet black
-      0x241711, // Dark espresso
-      0x2f1e16  // Dark charcoal
-    ];
+    const menShirtColors = [0xf8fafc, 0x1e3a8a, 0x0284c7, 0x047857, 0xd97706, 0xb45309, 0xbe123c, 0x0f172a];
+    const womenShirtColors = [0xec4899, 0x0d9488, 0x8b5cf6, 0xf59e0b, 0x06b6d4, 0xbe123c, 0x10b981, 0xf43f5e];
 
-    // Authentic Northern Nigerian attire colors
-    const shirtColors = [
-      0xf8fafc, // Royal crisp white (farar riga)
-      0x1e3a8a, // Deep Kano/Hadejia indigo blue (shuni)
-      0x0284c7, // Sky azure blue
-      0x047857, // Royal emerald green
-      0xd97706, // Saffron golden ochre
-      0xb45309, // Earthy terracotta
-      0xbe123c, // Royal crimson
-      0x4338ca, // Regal royal purple
-      0x0f172a, // Midnight charcoal
-      0x059669  // Mint green
-    ];
-
-    const embroideryColors = [
-      0xf59e0b, // Golden silk thread
-      0xf8fafc, // Crisp white thread
-      0x0284c7, // Turquoise accent
-      0x10b981, // Emerald silk thread
-      0xec4899, // Vibrant rose thread
-      0x7c3aed  // Royal violet thread
-    ];
-
-    const pantsColors = [
-      0xf8fafc, 0x1e3a8a, 0x0284c7, 0x047857,
-      0xd97706, 0x1e293b, 0x334155, 0x78350f
-    ];
-
-    const shoeColors = [
-      0x78350f, // Handcrafted brown leather
-      0x451a03, // Dark mahogany leather
-      0x1c1917, // Black leather
-      0xd97706, // Tan leather sandals
-      0xf8fafc  // White ceremonial slippers
-    ];
+    const embroideryColors = [0xf59e0b, 0xf8fafc, 0x0284c7, 0x10b981, 0xec4899, 0x7c3aed];
+    const pantsColors = [0xf8fafc, 0x1e3a8a, 0x0284c7, 0x047857, 0xd97706, 0x1e293b, 0x334155, 0x78350f, 0x0f766e];
+    const shoeColors = [0x78350f, 0x451a03, 0x1c1917, 0xd97706, 0xf8fafc];
 
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     const skinProf = pick(skinProfiles);
 
     return {
       skinColor: skinProf.skin,
-      lipColor: skinProf.lips,
+      lipColor: gender === 'women' ? 0xc2415d : skinProf.lips,
       eyeColor: pick(eyeColors),
       hairColor: pick(hairColors),
-      shirtColor: pick(shirtColors),
+      shirtColor: pick(gender === 'women' ? womenShirtColors : menShirtColors),
       jacketColor: pick(embroideryColors),
       pantsColor: pick(pantsColors),
       shoesColor: pick(shoeColors)
