@@ -278,7 +278,7 @@ export class PedestrianSystem {
         id: `citizen_${i}`,
         gender: isMen ? 'men' : 'women',
         avatarId: genderId,
-        fbxInstance,
+        fbxInstance: null,
         rig,
         mesh,
         name,
