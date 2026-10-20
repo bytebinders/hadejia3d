@@ -1324,6 +1324,51 @@ input:checked + .slider.round:before {
   margin: 0 2px;
 }
 
+/* Bench / Chair Proximity Interaction Prompt */
+.bench-prompt {
+  position: absolute;
+  bottom: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 115;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5), 0 0 18px rgba(245, 158, 11, 0.35);
+  animation: prompt-pulse 1.8s ease-in-out infinite;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.bench-prompt.hidden {
+  display: none;
+}
+
+.bench-prompt .prompt-icon {
+  font-size: 1.15rem;
+}
+
+.bench-prompt .prompt-text {
+  font-family: var(--font-main);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fef3c7;
+}
+
+.bench-prompt kbd {
+  background: #f59e0b;
+  color: #451a03;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 5px;
+  margin: 0 2px;
+}
+
 /* Glassmorphism Citizen Dialogue Modal Card */
 .citizen-dialogue-modal {
   position: absolute;

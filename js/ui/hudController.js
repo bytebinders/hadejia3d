@@ -83,6 +83,13 @@ export class HUDController {
     this.btnCarText = document.getElementById('btn-car-text');
     this.vehiclePrompt = document.getElementById('vehicle-prompt');
     this.vehiclePromptText = document.getElementById('vehicle-prompt-text');
+    this.benchPrompt = document.getElementById('bench-prompt');
+    this.benchPromptText = document.getElementById('bench-prompt-text');
+
+    // Link HUD to PlayerController
+    if (this.app.playerCtrl) {
+      this.app.playerCtrl.setHudController(this);
+    }
 
     // Citizen Dialogue & Talk HUD
     this.btnPlayerTalk = document.getElementById('btn-player-talk');
@@ -325,6 +332,15 @@ export class HUDController {
       if (this.citizenPrompt) {
         this.citizenPrompt.addEventListener('click', () => {
           this._handleTalkTrigger();
+        });
+      }
+
+      if (this.benchPrompt) {
+        this.benchPrompt.addEventListener('click', () => {
+          if (this.app.playerCtrl) {
+            this.app.playerCtrl.toggleSit();
+            this.app.soundSys.playClick();
+          }
         });
       }
 
@@ -1035,7 +1051,11 @@ export class HUDController {
         this.btnPlayerRun.classList.toggle('active', pc.keys.shift);
       }
       if (this.btnPlayerSit) {
-        this.btnPlayerSit.classList.toggle('active', pc.state === 'SIT');
+        const isSitting = pc.state === 'SIT';
+        this.btnPlayerSit.classList.toggle('active', isSitting);
+        this.btnPlayerSit.innerHTML = isSitting
+          ? '<span class="pill-icon">🚶</span> Stand <kbd>C</kbd>'
+          : '<span class="pill-icon">🪑</span> Sit <kbd>C</kbd>';
       }
       if (this.btnPlayerLay) {
         this.btnPlayerLay.classList.toggle('active', pc.state === 'LAY');
@@ -1081,6 +1101,27 @@ export class HUDController {
             this.citizenPrompt.classList.remove('hidden');
           } else {
             this.citizenPrompt.classList.add('hidden');
+          }
+        }
+
+        // Bench / Chair Proximity Prompt
+        if (this.benchPrompt) {
+          if (!pc.isDriving && !pc.nearbyVehicle && !pc.isTalking) {
+            if (pc.state === 'SIT') {
+              if (this.benchPromptText) {
+                this.benchPromptText.innerHTML = `Resting on Bench — Press <kbd>C</kbd> or <kbd>WASD</kbd> to Stand`;
+              }
+              this.benchPrompt.classList.remove('hidden');
+            } else if (pc.nearbyBench && !pc.nearbyCitizen) {
+              if (this.benchPromptText) {
+                this.benchPromptText.innerHTML = `Park Bench — Press <kbd>C</kbd> to Sit`;
+              }
+              this.benchPrompt.classList.remove('hidden');
+            } else {
+              this.benchPrompt.classList.add('hidden');
+            }
+          } else {
+            this.benchPrompt.classList.add('hidden');
           }
         }
 

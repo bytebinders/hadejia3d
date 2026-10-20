@@ -659,18 +659,33 @@ export class NetworkManager {
         break;
       }
 
-      case 'SIT':
+      case 'SIT': {
+        const isWomen = (rp.gender === 'women');
+        r.hips.position.y = 1.05;
+        r.hips.position.z = -0.15;
+        r.leftLegUpper.rotation.set(-Math.PI / 2 + 0.06, 0, isWomen ? 0.03 : 0.09);
+        r.leftLegLower.rotation.set(Math.PI / 2 - 0.06, 0, 0);
+        r.rightLegUpper.rotation.set(-Math.PI / 2 + 0.06, 0, isWomen ? -0.03 : -0.09);
+        r.rightLegLower.rotation.set(Math.PI / 2 - 0.06, 0, 0);
+        r.leftArmUpper.rotation.set(-0.35, 0, 0.12);
+        r.leftArmLower.rotation.set(-0.72, 0.08, 0);
+        r.rightArmUpper.rotation.set(-0.35, 0, -0.12);
+        r.rightArmLower.rotation.set(-0.72, -0.08, 0);
+        r.torso.rotation.set(-0.06, 0, 0);
+        break;
+      }
+
       case 'DRIVING': {
         r.hips.position.y = 0.72;
         r.hips.position.z = -0.2;
-        r.leftLegUpper.rotation.x = -Math.PI / 2 + 0.1;
-        r.leftLegLower.rotation.x = Math.PI / 2 - 0.1;
-        r.rightLegUpper.rotation.x = -Math.PI / 2 + 0.1;
-        r.rightLegLower.rotation.x = Math.PI / 2 - 0.1;
-        r.leftArmUpper.rotation.x = -0.4;
-        r.leftArmLower.rotation.x = 0.6;
-        r.rightArmUpper.rotation.x = -0.4;
-        r.rightArmLower.rotation.x = 0.6;
+        r.leftLegUpper.rotation.set(-Math.PI / 2 + 0.15, 0, 0.08);
+        r.leftLegLower.rotation.set(Math.PI / 2 - 0.2, 0, 0);
+        r.rightLegUpper.rotation.set(-Math.PI / 2 + 0.15, 0, -0.08);
+        r.rightLegLower.rotation.set(Math.PI / 2 - 0.2, 0, 0);
+        r.leftArmUpper.rotation.set(-0.6, 0, 0.18);
+        r.leftArmLower.rotation.set(-0.85, 0.1, 0);
+        r.rightArmUpper.rotation.set(-0.6, 0, -0.18);
+        r.rightArmLower.rotation.set(-0.85, -0.1, 0);
         break;
       }
 

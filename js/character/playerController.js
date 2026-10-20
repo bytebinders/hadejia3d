@@ -46,6 +46,11 @@ export class PlayerController {
     this.isTalking = false;
     this.currentTalkCitizen = null;
 
+    // Chair & Bench sitting tracking
+    this.nearbyBench = null;
+    this.currentBench = null;
+    this.hudCtrl = null;
+
     // States: 'IDLE', 'WALK', 'RUN', 'JUMP', 'SIT', 'LAY', 'DANCE', 'WAVE', 'DRIVING'
     this.state = 'IDLE';
 
@@ -251,7 +256,11 @@ export class PlayerController {
   }
 
   _interruptIdlePoses() {
-    if (this.state === 'SIT' || this.state === 'LAY' || this.state === 'DANCE' || this.state === 'WAVE') {
+    if (this.state === 'SIT') {
+      this.standUp();
+      return;
+    }
+    if (this.state === 'LAY' || this.state === 'DANCE' || this.state === 'WAVE') {
       this.state = 'IDLE';
       this._resetBoneTransforms();
     }
@@ -338,12 +347,85 @@ export class PlayerController {
   toggleSit() {
     if (this.isDriving) return;
     if (this.state === 'SIT') {
-      this.state = 'IDLE';
-      this._resetBoneTransforms();
-    } else {
-      this.state = 'SIT';
-      this.velocity.set(0, 0, 0);
+      this.standUp();
+      return;
     }
+
+    // Players can ONLY sit on chairs or park benches
+    const bench = this.getNearbyBench(2.8);
+    if (!bench) {
+      if (this.hudCtrl) {
+        this.hudCtrl.showToast('🪑 You can only sit on a chair or park bench! Walk up to one [Press C]');
+      }
+      return;
+    }
+
+    this.sitOnBench(bench);
+  }
+
+  sitOnBench(bench) {
+    if (!bench) return;
+
+    this.state = 'SIT';
+    this.velocity.set(0, 0, 0);
+    this.currentBench = bench;
+    bench.occupant = this;
+
+    const groundY = this.collisionSys
+      ? this.collisionSys.getGroundHeight(bench.x, bench.z)
+      : this.groundY;
+    this.mesh.position.set(bench.x, groundY, bench.z);
+    this.mesh.rotation.set(0, bench.rot, 0);
+
+    if (this.hudCtrl) {
+      this.hudCtrl.showToast('🪑 Sitting on bench. Press [C] or move (WASD) to stand up.');
+    }
+  }
+
+  standUp() {
+    if (this.state !== 'SIT') return;
+
+    if (this.currentBench) {
+      if (this.currentBench.occupant === this) {
+        this.currentBench.occupant = null;
+      }
+      // Step slightly forward off the bench in facing direction
+      const fwdX = Math.sin(this.mesh.rotation.y);
+      const fwdZ = Math.cos(this.mesh.rotation.y);
+      this.mesh.position.x += fwdX * 0.65;
+      this.mesh.position.z += fwdZ * 0.65;
+      this.currentBench = null;
+    }
+
+    this.state = 'IDLE';
+    this._resetBoneTransforms();
+
+    if (this.hudCtrl) {
+      this.hudCtrl.showToast('🚶 Stood up from bench.');
+    }
+  }
+
+  getNearbyBench(maxDist = 2.8) {
+    if (!this.pedestrianSys || !this.pedestrianSys.benches) return null;
+    const px = this.mesh.position.x;
+    const pz = this.mesh.position.z;
+    let closest = null;
+    let minDistSq = maxDist * maxDist;
+
+    for (const b of this.pedestrianSys.benches) {
+      const dx = b.x - px;
+      const dz = b.z - pz;
+      const dSq = dx * dx + dz * dz;
+      if (dSq < minDistSq) {
+        minDistSq = dSq;
+        closest = b;
+      }
+    }
+    return closest;
+  }
+
+  setHudController(hudCtrl) {
+    this.hudCtrl = hudCtrl;
   }
 
   toggleLay() {
@@ -442,6 +524,7 @@ export class PlayerController {
     r.hips.position.set(0, 1.35, 0);
     r.hips.rotation.set(0, 0, 0);
     r.torso.rotation.set(0, 0, 0);
+    r.torso.scale.set(1, 1, 1);
     r.headPivot.rotation.set(0, 0, 0);
     r.leftArmUpper.rotation.set(0, 0, 0);
     r.leftArmLower.rotation.set(0, 0, 0);
@@ -467,7 +550,20 @@ export class PlayerController {
       this._updateOnFoot(delta);
       this._checkNearbyVehicles();
       this._checkNearbyCitizens();
+      this._checkNearbyBenches();
     }
+  }
+
+  _checkNearbyBenches() {
+    if (this.isDriving) {
+      this.nearbyBench = null;
+      return;
+    }
+    if (this.state === 'SIT') {
+      this.nearbyBench = this.currentBench;
+      return;
+    }
+    this.nearbyBench = this.getNearbyBench(2.8);
   }
 
   _checkNearbyCitizens() {
@@ -859,20 +955,33 @@ export class PlayerController {
       }
 
       case 'SIT': {
-        r.hips.position.y = 0.72;
-        r.hips.position.z = -0.2;
+        const isWomen = (this.activeAvatar === 'xixi');
 
-        r.leftLegUpper.rotation.x = -Math.PI / 2 + 0.1;
-        r.leftLegLower.rotation.x = Math.PI / 2 - 0.1;
-        r.rightLegUpper.rotation.x = -Math.PI / 2 + 0.1;
-        r.rightLegLower.rotation.x = Math.PI / 2 - 0.1;
+        // Buttocks rest directly on top of the bench seat surface (0.68m world height)
+        r.hips.position.y = 1.05;
+        r.hips.position.z = -0.15;
 
-        r.leftArmUpper.rotation.x = -0.4;
-        r.leftArmLower.rotation.x = -0.6;
-        r.rightArmUpper.rotation.x = -0.4;
-        r.rightArmLower.rotation.x = -0.6;
+        // Thighs extend horizontally forward onto seat
+        r.leftLegUpper.rotation.set(-Math.PI / 2 + 0.06, 0, isWomen ? 0.03 : 0.09);
+        r.leftLegLower.rotation.set(Math.PI / 2 - 0.06, 0, 0);
 
-        r.torso.rotation.x = -0.05;
+        r.rightLegUpper.rotation.set(-Math.PI / 2 + 0.06, 0, isWomen ? -0.03 : -0.09);
+        r.rightLegLower.rotation.set(Math.PI / 2 - 0.06, 0, 0);
+
+        // Relaxed resting arms with hands comfortably on thighs/lap
+        r.leftArmUpper.rotation.set(-0.35, 0, 0.12);
+        r.leftArmLower.rotation.set(-0.72, 0.08, 0);
+        r.rightArmUpper.rotation.set(-0.35, 0, -0.12);
+        r.rightArmLower.rotation.set(-0.72, -0.08, 0);
+
+        // Natural relaxed torso leaning back against backrest with organic breathing
+        const t = this.animTime;
+        const breath = Math.sin(t * 1.8);
+        r.torso.rotation.set(-0.06 + breath * 0.012, 0, 0);
+        r.torso.scale.set(1 + breath * 0.01, 1, 1 + breath * 0.015);
+
+        // Subtle lifelike gaze forward
+        r.headPivot.rotation.set(0.04, Math.sin(t * 0.6) * 0.08, 0);
         break;
       }
 

@@ -268,6 +268,14 @@ export class CityBuilder {
     // Royal Guest Residence (Gidan Baki na Masarauta)
     this._placeBuilding(this.buildingGen.createTraditionalHausaCompound(11, 10, 'Gidan Baki na Masarauta (Royal Guest Lodge)'), -46, baseY, -38, parent);
 
+    // Palace Square Resting Benches (Fadar Sarki)
+    [-66, -54].forEach(bx => {
+      const bench = this.natureGen.createBench();
+      bench.position.set(bx, baseY + 0.35, -13);
+      bench.rotation.y = 0;
+      parent.add(bench);
+    });
+
     // === DISTRICT 2: MASALLACIN JUMA'A & ISLAMIC HERITAGE CORE ===
     // (X: -30 to 10, Z: -45 to -5)
     // Central Friday Mosque of Hadejia with twin minarets and emerald dome
@@ -469,6 +477,14 @@ export class CityBuilder {
     pier.position.set(33, 1.2, 0);
     pier.receiveShadow = true;
     parent.add(pier);
+
+    // Boardwalk Resting Benches overlooking Kogin Hadejia
+    [-10, 10].forEach(bz => {
+      const bench = this.natureGen.createBench();
+      bench.position.set(32.2, 1.4, bz);
+      bench.rotation.y = Math.PI / 2;
+      parent.add(bench);
+    });
 
     // Finger Docks extending into Kogin Hadejia
     const fingerZ = [-80, -20, 20, 80];

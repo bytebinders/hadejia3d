@@ -77,12 +77,16 @@ export class PedestrianSystem {
       jog: this._createBubbleTexture('🏃')
     };
 
-    // Metropolis Bench network in Central Park
+    // Metropolis Bench network across Central Park, Palace Square & Marina
     this.benches = [
       { id: 'bench_1', x: -16.8, z: 25, rot: Math.PI / 2, occupant: null },
       { id: 'bench_2', x: -3.2,  z: 25, rot: -Math.PI / 2, occupant: null },
-      { id: 'bench_3', x: -10,   z: 18.2, rot: Math.PI, occupant: null },
-      { id: 'bench_4', x: -10,   z: 31.8, rot: 0, occupant: null }
+      { id: 'bench_3', x: -10,   z: 18.2, rot: 0, occupant: null },
+      { id: 'bench_4', x: -10,   z: 31.8, rot: Math.PI, occupant: null },
+      { id: 'bench_palace_1', x: -66, z: -13, rot: 0, occupant: null },
+      { id: 'bench_palace_2', x: -54, z: -13, rot: 0, occupant: null },
+      { id: 'bench_marina_1', x: 32.2, z: -10, rot: Math.PI / 2, occupant: null },
+      { id: 'bench_marina_2', x: 32.2, z: 10, rot: Math.PI / 2, occupant: null }
     ];
 
     // Interconnected City-Wide Waypoint Graph
@@ -341,7 +345,7 @@ export class PedestrianSystem {
         citizen.stateTimer = 12.0 + Math.random() * 15.0;
         mesh.position.set(b.x, groundY, b.z);
         mesh.rotation.y = b.rot;
-        this._applySittingPose(citizen.rig);
+        this._applySittingPose(citizen.rig, citizen.gender);
       }
 
       this.group.add(mesh);
@@ -349,19 +353,31 @@ export class PedestrianSystem {
     }
   }
 
-  _applySittingPose(rig) {
+  _applySittingPose(rig, gender = 'men') {
     if (!rig) return;
-    rig.hips.position.y = 0.72;
-    rig.hips.position.z = -0.2;
-    rig.leftLegUpper.rotation.x = -Math.PI / 2 + 0.1;
-    rig.leftLegLower.rotation.x = Math.PI / 2 - 0.1;
-    rig.rightLegUpper.rotation.x = -Math.PI / 2 + 0.1;
-    rig.rightLegLower.rotation.x = Math.PI / 2 - 0.1;
-    // Hands resting on the lap (negative elbow = natural forward flexion)
-    rig.leftArmUpper.rotation.x = -0.35;
-    rig.leftArmLower.rotation.x = -0.6;
-    rig.rightArmUpper.rotation.x = -0.35;
-    rig.rightArmLower.rotation.x = -0.6;
+    const isWomen = (gender === 'women');
+
+    // Hips rest directly on the wooden seat slat surface (0.68m world height)
+    rig.hips.position.y = 1.05;
+    rig.hips.position.z = -0.15;
+
+    // Thighs extend horizontally forward onto seat
+    rig.leftLegUpper.rotation.set(-Math.PI / 2 + 0.06, 0, isWomen ? 0.03 : 0.09);
+    rig.leftLegLower.rotation.set(Math.PI / 2 - 0.06, 0, 0);
+
+    rig.rightLegUpper.rotation.set(-Math.PI / 2 + 0.06, 0, isWomen ? -0.03 : -0.09);
+    rig.rightLegLower.rotation.set(Math.PI / 2 - 0.06, 0, 0);
+
+    // Natural arm rest on lap/thighs with elbows bent forward
+    rig.leftArmUpper.rotation.set(-0.35, 0, 0.12);
+    rig.leftArmLower.rotation.set(-0.72, 0.08, 0);
+
+    rig.rightArmUpper.rotation.set(-0.35, 0, -0.12);
+    rig.rightArmLower.rotation.set(-0.72, -0.08, 0);
+
+    // Spine comfortably upright leaning slightly back against backrest
+    rig.torso.rotation.set(-0.06, 0, 0);
+    rig.headPivot.rotation.set(0.04, 0, 0);
   }
 
   _resetToStandingPose(rig) {
@@ -847,7 +863,7 @@ export class PedestrianSystem {
               : 1.85;
             c.mesh.position.set(freeBench.x, groundY, freeBench.z);
             c.mesh.rotation.y = freeBench.rot;
-            this._applySittingPose(c.rig);
+            this._applySittingPose(c.rig, c.gender);
             c.bubbleSprite.visible = true;
             c.bubbleSprite.material.map = this.bubbleTextures.bench;
             return;
