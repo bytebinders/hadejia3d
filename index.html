@@ -105,6 +105,28 @@
 
     <!-- Quick Audio & Help Buttons -->
     <div class="header-actions">
+      <!-- User Profile / Supabase Auth Button -->
+      <div class="user-auth-wrapper">
+        <button id="btn-user-auth" class="icon-btn auth-btn" title="Sign In or Manage Account" aria-label="Account">
+          <span id="user-auth-icon">👤</span>
+          <span id="user-auth-name" class="auth-name-label">Sign In</span>
+        </button>
+        <!-- User Dropdown Popover -->
+        <div id="user-dropdown-menu" class="user-dropdown-popover glass-panel hidden">
+          <div class="user-dropdown-header">
+            <span class="dropdown-avatar-badge">👤</span>
+            <div class="dropdown-user-details">
+              <strong id="dropdown-username-display">Explorer</strong>
+              <span id="dropdown-email-display" class="dropdown-email-text">user@mail.com</span>
+            </div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <button id="btn-dropdown-logout" class="dropdown-action-btn logout-btn">
+            <span>🚪</span> Sign Out
+          </button>
+        </div>
+      </div>
+
       <button id="btn-voice-toggle" class="icon-btn voice-btn" title="Toggle Proximity Voice Chat (V)"
         aria-label="Toggle Voice Chat">
         <span id="voice-icon">🎙️</span>
@@ -534,6 +556,98 @@
     <span id="toast-icon">✨</span>
     <span id="toast-text">Camera locked to High-Speed Monorail</span>
   </div>
+
+  <!-- Supabase Authentication Modal (Login / Sign Up) -->
+  <div id="auth-modal" class="auth-modal-overlay hidden">
+    <div class="auth-modal-card glass-panel">
+      <!-- Modal Header -->
+      <div class="auth-modal-header">
+        <div class="auth-brand-badge">
+          <span class="auth-brand-icon">🏛️</span>
+          <div>
+            <h3>HADEJIA 3D PASSPORT</h3>
+            <span class="auth-brand-sub">Cloud Identity & Multiplayer Citizen Sync</span>
+          </div>
+        </div>
+        <button id="btn-close-auth-modal" class="btn-close-modal" aria-label="Close Auth Modal">✕</button>
+      </div>
+
+      <!-- Auth Mode Tabs -->
+      <div class="auth-tabs">
+        <button id="tab-auth-login" class="auth-tab-btn active">🔑 Log In</button>
+        <button id="tab-auth-signup" class="auth-tab-btn">📝 Create Account</button>
+      </div>
+
+      <!-- Feedback / Status Banner -->
+      <div id="auth-alert-box" class="auth-alert hidden">
+        <span id="auth-alert-icon">⚠️</span>
+        <span id="auth-alert-text">Status message</span>
+      </div>
+
+      <!-- Log In Form -->
+      <form id="form-login" class="auth-form">
+        <div class="auth-input-group">
+          <label for="login-email">Email Address</label>
+          <div class="input-with-icon">
+            <span class="input-icon">✉️</span>
+            <input type="email" id="login-email" placeholder="name@example.com" autocomplete="email" required>
+          </div>
+        </div>
+
+        <div class="auth-input-group">
+          <label for="login-password">Password</label>
+          <div class="input-with-icon">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-submit-login" class="auth-submit-btn glow-btn">
+          <span>🚀</span> Log In to Hadejia 3D
+        </button>
+      </form>
+
+      <!-- Sign Up Form -->
+      <form id="form-signup" class="auth-form hidden">
+        <div class="auth-input-group">
+          <label for="signup-username">Citizen / Explorer Tag</label>
+          <div class="input-with-icon">
+            <span class="input-icon">👤</span>
+            <input type="text" id="signup-username" placeholder="e.g. DanHadejia, SarkinYamma" maxlength="20" autocomplete="username" required>
+          </div>
+          <small class="input-hint">Displayed over your 3D avatar & in multiplayer voice.</small>
+        </div>
+
+        <div class="auth-input-group">
+          <label for="signup-email">Email Address</label>
+          <div class="input-with-icon">
+            <span class="input-icon">✉️</span>
+            <input type="email" id="signup-email" placeholder="name@example.com" autocomplete="email" required>
+          </div>
+        </div>
+
+        <div class="auth-input-group">
+          <label for="signup-password">Password (min. 6 characters)</label>
+          <div class="input-with-icon">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="signup-password" placeholder="••••••••" minlength="6" autocomplete="new-password" required>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-submit-signup" class="auth-submit-btn glow-btn">
+          <span>✨</span> Create Account & Join
+        </button>
+      </form>
+
+      <!-- Modal Footer Action -->
+      <div class="auth-modal-footer">
+        <button id="btn-guest-mode" class="btn-guest-action">Continue as Guest Explorer ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Supabase Official Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Main Application Script (ES Module) -->
   <script type="module" src="./js/main.js"></script>

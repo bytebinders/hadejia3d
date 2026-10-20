@@ -105,6 +105,9 @@ export class NetworkManager {
         this.reconnectAttempts = 0;
         console.log(`[Multiplayer] Connected to server at ${wsUrl}`);
         this._notifyStatus('ONLINE');
+        if (this.localPlayerName && this.localPlayerName !== 'Citizen 1') {
+          this.setLocalPlayerName(this.localPlayerName);
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -674,5 +677,20 @@ export class NetworkManager {
 
   getPlayerCount() {
     return this.remotePlayers.size + 1;
+  }
+
+  setLocalPlayerName(name) {
+    if (!name) return;
+    this.localPlayerName = name;
+    if (this.isConnected && this.ws) {
+      try {
+        this.ws.send(JSON.stringify({
+          type: 'name_change',
+          name: this.localPlayerName
+        }));
+      } catch (e) {
+        console.warn('[Multiplayer] Failed to send name_change:', e);
+      }
+    }
   }
 }

@@ -14,6 +14,7 @@ import { CollisionSystem } from './city/collisionSystem.js';
 import { NetworkManager } from './network/networkManager.js';
 import { CityMap } from './ui/cityMap.js';
 import { VirtualJoystick } from './ui/virtualJoystick.js';
+import { AuthManager } from './auth/authManager.js';
 
 /**
  * Polis3D — Interactive Low-Poly 3D Metropolis Simulation
@@ -132,6 +133,9 @@ class MetropolisApp {
     // 13.5 Real-Time Wi-Fi / LAN Multiplayer Engine
     this._updateLoader(92, 'Connecting to Multiplayer Grid...');
     this.networkMgr = new NetworkManager(this.scene, this.playerCtrl, this.soundSys);
+
+    // 13.8 Supabase Authentication System
+    this.authMgr = new AuthManager(this);
 
     this._updateLoader(95, 'Finalizing HUD Controls...');
 

@@ -136,6 +136,33 @@ export class HUDController {
     this.btnDismissMicModal = document.getElementById('btn-dismiss-mic-modal');
     this.linkMicLocalhost = document.getElementById('link-mic-localhost');
     this.linkMicHttps = document.getElementById('link-mic-https');
+
+    // Supabase Authentication & Profile Elements
+    this.btnUserAuth = document.getElementById('btn-user-auth');
+    this.userAuthName = document.getElementById('user-auth-name');
+    this.userAuthIcon = document.getElementById('user-auth-icon');
+    this.userDropdown = document.getElementById('user-dropdown-menu');
+    this.dropdownUsername = document.getElementById('dropdown-username-display');
+    this.dropdownEmail = document.getElementById('dropdown-email-display');
+    this.btnDropdownLogout = document.getElementById('btn-dropdown-logout');
+
+    this.authModal = document.getElementById('auth-modal');
+    this.btnCloseAuthModal = document.getElementById('btn-close-auth-modal');
+    this.tabAuthLogin = document.getElementById('tab-auth-login');
+    this.tabAuthSignup = document.getElementById('tab-auth-signup');
+    this.authAlertBox = document.getElementById('auth-alert-box');
+    this.authAlertIcon = document.getElementById('auth-alert-icon');
+    this.authAlertText = document.getElementById('auth-alert-text');
+    this.formLogin = document.getElementById('form-login');
+    this.formSignup = document.getElementById('form-signup');
+    this.loginEmail = document.getElementById('login-email');
+    this.loginPassword = document.getElementById('login-password');
+    this.btnSubmitLogin = document.getElementById('btn-submit-login');
+    this.signupUsername = document.getElementById('signup-username');
+    this.signupEmail = document.getElementById('signup-email');
+    this.signupPassword = document.getElementById('signup-password');
+    this.btnSubmitSignup = document.getElementById('btn-submit-signup');
+    this.btnGuestMode = document.getElementById('btn-guest-mode');
   }
 
   _initHighlightBox() {
@@ -414,6 +441,9 @@ export class HUDController {
 
     // 8. Multiplayer Wi-Fi Networking & Chat
     this._bindMultiplayerEvents();
+
+    // 9. Supabase User Authentication & Cloud Passport
+    this._bindAuthEvents();
   }
 
   _bindMultiplayerEvents() {
@@ -617,6 +647,188 @@ export class HUDController {
           }, 450);
         };
       }
+    }
+  }
+
+  _bindAuthEvents() {
+    if (!this.app.authMgr) return;
+
+    const setAlert = (msg, type = 'error') => {
+      if (!this.authAlertBox) return;
+      if (!msg) {
+        this.authAlertBox.classList.add('hidden');
+        return;
+      }
+      this.authAlertBox.className = `auth-alert ${type}`;
+      if (this.authAlertIcon) {
+        this.authAlertIcon.textContent = type === 'success' ? '✅' : '⚠️';
+      }
+      if (this.authAlertText) {
+        this.authAlertText.textContent = msg;
+      }
+      this.authAlertBox.classList.remove('hidden');
+    };
+
+    // 1. Sync User state to HUD
+    this.app.authMgr.onUserChange((user, username) => {
+      if (user) {
+        if (this.btnUserAuth) this.btnUserAuth.classList.add('logged-in');
+        if (this.userAuthName) this.userAuthName.textContent = username;
+        if (this.userAuthIcon) this.userAuthIcon.textContent = '👑';
+        if (this.dropdownUsername) this.dropdownUsername.textContent = username;
+        if (this.dropdownEmail) this.dropdownEmail.textContent = user.email || '';
+      } else {
+        if (this.btnUserAuth) this.btnUserAuth.classList.remove('logged-in');
+        if (this.userAuthName) this.userAuthName.textContent = 'Sign In';
+        if (this.userAuthIcon) this.userAuthIcon.textContent = '👤';
+        if (this.userDropdown) this.userDropdown.classList.add('hidden');
+      }
+    });
+
+    // 2. Open Auth Modal or Toggle Dropdown
+    if (this.btnUserAuth) {
+      this.btnUserAuth.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.app.authMgr.isLoggedIn()) {
+          if (this.userDropdown) this.userDropdown.classList.toggle('hidden');
+        } else {
+          if (this.authModal) {
+            setAlert(null);
+            this.authModal.classList.remove('hidden');
+            if (this.loginEmail) this.loginEmail.focus();
+          }
+        }
+      });
+    }
+
+    // Close Dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (this.userDropdown && !this.userDropdown.classList.contains('hidden')) {
+        const wrapper = document.querySelector('.user-auth-wrapper');
+        if (wrapper && !wrapper.contains(e.target)) {
+          this.userDropdown.classList.add('hidden');
+        }
+      }
+    });
+
+    // 3. Close Auth Modal
+    const closeModal = () => {
+      if (this.authModal) this.authModal.classList.add('hidden');
+      setAlert(null);
+    };
+
+    if (this.btnCloseAuthModal) this.btnCloseAuthModal.addEventListener('click', closeModal);
+    if (this.btnGuestMode) {
+      this.btnGuestMode.addEventListener('click', () => {
+        closeModal();
+        this.showToast('Exploring as Guest Citizen', '👋');
+      });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.authModal && !this.authModal.classList.contains('hidden')) {
+        closeModal();
+      }
+    });
+
+    // 4. Tab Switching
+    if (this.tabAuthLogin && this.tabAuthSignup) {
+      this.tabAuthLogin.addEventListener('click', () => {
+        this.tabAuthLogin.classList.add('active');
+        this.tabAuthSignup.classList.remove('active');
+        if (this.formLogin) this.formLogin.classList.remove('hidden');
+        if (this.formSignup) this.formSignup.classList.add('hidden');
+        setAlert(null);
+      });
+
+      this.tabAuthSignup.addEventListener('click', () => {
+        this.tabAuthSignup.classList.add('active');
+        this.tabAuthLogin.classList.remove('active');
+        if (this.formSignup) this.formSignup.classList.remove('hidden');
+        if (this.formLogin) this.formLogin.classList.add('hidden');
+        setAlert(null);
+      });
+    }
+
+    // 5. Submit Login
+    if (this.formLogin) {
+      this.formLogin.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = this.loginEmail ? this.loginEmail.value.trim() : '';
+        const password = this.loginPassword ? this.loginPassword.value : '';
+
+        if (!email || !password) {
+          setAlert('Please enter both email and password.');
+          return;
+        }
+
+        try {
+          if (this.btnSubmitLogin) {
+            this.btnSubmitLogin.disabled = true;
+            this.btnSubmitLogin.textContent = 'Authenticating...';
+          }
+          setAlert(null);
+
+          await this.app.authMgr.signIn({ email, password });
+          const username = this.app.authMgr.getUsername();
+          closeModal();
+          this.showToast(`Welcome back, ${username}!`, '✨');
+        } catch (err) {
+          setAlert(err.message || 'Failed to log in. Please check your credentials.');
+        } finally {
+          if (this.btnSubmitLogin) {
+            this.btnSubmitLogin.disabled = false;
+            this.btnSubmitLogin.innerHTML = '<span>🚀</span> Log In to Hadejia 3D';
+          }
+        }
+      });
+    }
+
+    // 6. Submit Sign Up
+    if (this.formSignup) {
+      this.formSignup.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = this.signupUsername ? this.signupUsername.value.trim() : '';
+        const email = this.signupEmail ? this.signupEmail.value.trim() : '';
+        const password = this.signupPassword ? this.signupPassword.value : '';
+
+        if (!email || !password) {
+          setAlert('Please complete all required fields.');
+          return;
+        }
+
+        try {
+          if (this.btnSubmitSignup) {
+            this.btnSubmitSignup.disabled = true;
+            this.btnSubmitSignup.textContent = 'Creating Account...';
+          }
+          setAlert(null);
+
+          const res = await this.app.authMgr.signUp({ email, password, username });
+          if (res.autoLoggedIn) {
+            closeModal();
+            this.showToast(`Welcome to Hadejia 3D, ${username}!`, '🎉');
+          } else {
+            setAlert(res.message || 'Account created! Please check your email to confirm registration.', 'success');
+          }
+        } catch (err) {
+          setAlert(err.message || 'Failed to create account.');
+        } finally {
+          if (this.btnSubmitSignup) {
+            this.btnSubmitSignup.disabled = false;
+            this.btnSubmitSignup.innerHTML = '<span>✨</span> Create Account & Join';
+          }
+        }
+      });
+    }
+
+    // 7. Logout
+    if (this.btnDropdownLogout) {
+      this.btnDropdownLogout.addEventListener('click', async () => {
+        await this.app.authMgr.signOut();
+        if (this.userDropdown) this.userDropdown.classList.add('hidden');
+        this.showToast('Logged out. Switched to Guest Explorer.', '👋');
+      });
     }
   }
 
