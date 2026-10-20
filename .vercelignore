@@ -1,0 +1,4 @@
+server.js
+cert.pem
+key.pem
+*.log

@@ -33,16 +33,42 @@ const MIME_TYPES = {
 // 1. HTTP & HTTPS Static File Server
 function handleHttpRequest(req, res) {
   let reqPath = decodeURI(req.url.split('?')[0]);
-  if (reqPath === '/' || reqPath === '') {
+  if (reqPath === '/' || reqPath === '' || reqPath === '/index.html') {
     reqPath = '/index.html';
   }
 
-  // Prevent directory traversal attacks
-  const safePath = path.normalize(reqPath).replace(/^(\.\.[\/\\])+/, '');
-  const filePath = path.join(__dirname, safePath);
+  // Prevent directory traversal attacks and strip leading slashes
+  const cleanPath = reqPath.replace(/^[\\\/]+/, '');
+  const safePath = path.normalize(cleanPath).replace(/^(\.\.[\/\\])+/, '');
+
+  // Look in multiple candidate locations
+  const candidatePaths = [
+    path.join(__dirname, safePath),
+    path.join(process.cwd(), safePath),
+    path.resolve(safePath)
+  ];
+
+  let filePath = candidatePaths.find(p => {
+    try {
+      return fs.existsSync(p) && fs.statSync(p).isFile();
+    } catch {
+      return false;
+    }
+  }) || candidatePaths[0];
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
+      // Fallback to index.html for SPA routing if available
+      const fallbackIndex = path.join(__dirname, 'index.html');
+      if (fs.existsSync(fallbackIndex)) {
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Access-Control-Allow-Origin': '*'
+        });
+        fs.createReadStream(fallbackIndex).pipe(res);
+        return;
+      }
+
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end(`404 Not Found: ${reqPath}`);
       return;
